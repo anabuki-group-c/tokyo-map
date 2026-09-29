@@ -22,9 +22,21 @@ def main() -> None:
     subcommands = parser.add_subparsers(dest="command", required=True)
     subcommands.add_parser("import-static-railways", help="Download N02 and write JR East/Tokyo Metro GeoJSON")
     subcommands.add_parser("fetch-tokyo-metro-status", help="Fetch current ODPT Tokyo Metro notices")
+    jr_parser = subcommands.add_parser("import-jr-gtfs", help="Import a licensed local JR GTFS ZIP; restart the server afterwards")
+    jr_parser.add_argument("path", type=Path, help="GTFS ZIP you are authorized to use")
+    web_parser = subcommands.add_parser("serve", help="Show the animated Tokyo Metro web map")
+    web_parser.add_argument("--host", default="127.0.0.1")
+    web_parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
-    if args.command == "import-static-railways":
+    if args.command == "serve":
+        from transit_experiment.web import serve
+        serve(args.host, args.port)
+    elif args.command == "import-jr-gtfs":
+        from transit_experiment.gtfs import import_feed
+        import_feed(args.path, PROCESSED_DIR / "jr-gtfs.sqlite")
+        print("JR GTFS imported. Restart the web server to replace the headway model with this timetable.")
+    elif args.command == "import-static-railways":
         counts = import_tokyo_railways(RAW_DIR, PROCESSED_DIR)
         print("Static railway import completed:")
         for name, count in counts.items():

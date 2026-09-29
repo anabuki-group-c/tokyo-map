@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tokyo Flow — メトロ・JR・都営バスマップ</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="/style.css?v=8">
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script defer src="/all.js?v=12"></script>
+  <script defer src="/extras.js?v=12"></script>
+  <script defer src="/trains.js?v=12"></script>
+  <script defer src="/app.js?v=12"></script>
+</head>
+<body>
+  <main>
+    <aside>
+      <header><p class="eyebrow">TOKYO / TRANSIT OBSERVATORY</p><h1>Tokyo <span>Flow.</span></h1><p class="subtitle">街をつなぐ、鉄道とバスの流れ。</p></header>
+      <label for="transport-mode" class="muted">表示する交通機関</label>
+      <select id="transport-mode" disabled><option value="metro">東京メトロ</option><option value="all">すべて</option><option value="jr">JR東日本</option><option value="bus">都営バス</option></select>
+      <section id="extra-panel" hidden>
+        <p id="extra-status" class="muted" role="status"></p>
+        <label for="extra-route" class="muted">JR・バスの路線・系統を絞り込み</label>
+        <select id="extra-route"><option value="">全路線</option></select>
+        <label class="muted"><input type="checkbox" id="extra-show-pins" checked> JR・バスの推定位置を矢印で表示</label>
+        <p class="muted">JRの小さい丸は駅です。駅名はマウスを重ねるかタップで確認できます。JRの矢印は仮の運転間隔・速度による簡易推定です（JRのGTFSが取得できた場合は時刻表推定）。遅延は無視し、実際の位置・本数は保証しません。バスは時刻表推定で、遅延・運休情報は未連携です。バスは渋滞・信号待ちで大きくずれる場合があります。</p>
+        <p id="extra-source" class="muted"></p>
+      </section>
+      <section id="metro-panel">
+      <div class="status-heading"><span class="pulse"></span><h2>運行情報</h2><span id="cache-tag">キャッシュ共有</span></div>
+      <p id="updated" class="muted" aria-live="polite">運行情報を読み込み中…</p>
+      <p id="warning" role="status" hidden></p>
+      <p id="train-status" class="muted" aria-live="polite">ODPTの実時刻表から列車位置を計算中…</p>
+      <p class="muted">矢印を押すと、その区間の発車・到着予定時刻を確認できます。</p>
+      <p class="muted">矢印＝時刻表による推定位置と進行方向（ひし形は方向不明）。赤＝運行のお知らせ・遅延あり。遅延量が分かる列車のみ時間補正します。平常運転でも実測位置とのズレはあります。</p>
+      <label class="muted"><input id="estimated-pins" type="checkbox" checked> 時刻表による推定位置を表示</label>
+      <div id="lines" aria-label="路線の絞り込み"></div>
+      <button id="reset" class="reset">全路線を表示 <span>↗</span></button>
+      </section>
+      <footer><strong>動く光は路線のアニメーションです。</strong><br>実際の列車位置・進行方向・運行本数を示すものではありません。<br>運行情報・時刻表・駅座標：公共交通オープンデータセンター／東京メトロ<br>路線・駅：国土数値情報（鉄道 N02・2022年）<br>路線形状は現行のネットワークと異なる場合があります。<br>都営バス：東京都交通局「バス関連情報（GTFS）」を加工（<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>）。<br>JR時刻表：JR東日本／公共交通オープンデータチャレンジ限定。公開利用は利用条件の確認が必要です。</footer>
+    </aside>
+    <section class="map-shell" aria-label="鉄道・バス路線地図">
+      <div id="map"></div>
+      <div class="map-badge"><span>NETWORK MAP</span><strong id="selection">東京メトロ / 全路線</strong></div>
+      <div class="map-controls"><button id="motion" aria-pressed="false">選択路線の動き OFF</button><button id="fit">全体を表示</button></div>
+      <div id="estimate-badge" hidden>時刻表による推定位置 · 実測ではありません</div>
+      <div id="map-error" role="alert" hidden></div>
+      <div class="map-note">軽量表示 · 動く線は演出 / 矢印は推定位置</div>
+    </section>
+  </main>
+</body>
+</html>
