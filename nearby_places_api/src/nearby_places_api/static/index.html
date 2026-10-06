@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>周辺施設検索 — 動作確認</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="style.css?v=2">
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script defer src="app.js?v=4"></script>
+</head>
+<body>
+  <main>
+    <aside>
+      <header>
+        <p class="eyebrow">LONG ROUTE TIMES / DEV TOOL</p>
+        <h1>周辺施設検索</h1>
+        <p class="muted">APIの動作確認用の画面です。地図をクリックするか、現在地を取得して検索の中心を決めます。検索対象は東京都内（点線の内側）です。</p>
+      </header>
+      <form id="search">
+        <button type="button" id="locate">現在地を取得</button>
+        <p id="center" class="muted">中心：未指定</p>
+        <label for="radius">検索半径（メートル）</label>
+        <input id="radius" type="number" min="1" max="5000" step="1" value="500" required>
+        <label for="category">施設区分</label>
+        <select id="category">
+          <option value="all">すべて</option>
+          <option value="restaurant">飲食店</option>
+          <option value="tourism">観光地</option>
+        </select>
+        <label for="limit">件数上限</label>
+        <input id="limit" type="number" min="1" max="100" step="1" value="20" required>
+        <button type="submit" id="submit" disabled>検索</button>
+      </form>
+      <p id="message" role="status" aria-live="polite"></p>
+      <ol id="results" aria-label="検索結果（距離順）"></ol>
+      <footer>
+        距離は直線距離です。徒歩の所要時間や道のりとは異なります。<br>
+        施設データ：&copy; <a href="https://overturemaps.org/">Overture Maps Foundation</a>（<a href="https://docs.overturemaps.org/attribution/">帰属表示</a>）<br>
+        地図：<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>（淡色地図）
+      </footer>
+    </aside>
+    <section class="map-shell" aria-label="検索地図">
+      <div id="map"></div>
+      <div id="map-error" role="alert" hidden></div>
+    </section>
+  </main>
+</body>
+</html>
