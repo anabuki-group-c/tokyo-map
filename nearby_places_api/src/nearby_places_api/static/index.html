@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>周辺施設検索 — 動作確認</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" crossorigin="">
   <link rel="stylesheet" href="style.css?v=2">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script defer src="app.js?v=4"></script>
+  <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js" crossorigin=""></script>
+  <script defer src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js" crossorigin=""></script>
+  <script defer src="app.js?v=5"></script>
 </head>
 <body>
   <main>
@@ -37,7 +40,7 @@
       <footer>
         距離は直線距離です。徒歩の所要時間や道のりとは異なります。<br>
         施設データ：&copy; <a href="https://overturemaps.org/">Overture Maps Foundation</a>（<a href="https://docs.overturemaps.org/attribution/">帰属表示</a>）<br>
-        地図：<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>（淡色地図）
+        地図：<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>（淡色地図・ベクトルタイル、地図記号は非表示）
       </footer>
     </aside>
     <section class="map-shell" aria-label="検索地図">

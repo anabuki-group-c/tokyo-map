@@ -168,17 +168,56 @@ async function showCoverage() {
   }
 }
 
+const BASEMAP_ATTRIBUTION = '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a> | Places &copy; Overture Maps Foundation';
+const PALE_VECTOR_STYLE = 'https://gsi-cyberjapan.github.io/gsivectortile-mapbox-gl-js/pale.json';
+
+// 地理院ベクトルタイルの淡色地図から地図記号（アイコン）を除く。文字の注記は残す。
+function withoutMapSymbols(style) {
+  const layers = [];
+  for (const layer of style.layers) {
+    const layout = layer.layout || {};
+    if (layer.type !== 'symbol' || !('icon-image' in layout)) {
+      layers.push(layer);
+    } else if ('text-field' in layout) {
+      const {'icon-image': _icon, ...rest} = layout;
+      layers.push({...layer, layout: rest});
+    }
+  }
+  return {...style, layers};
+}
+
+function addRasterBaseMap() {
+  L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+    attribution: BASEMAP_ATTRIBUTION, minZoom: 5, maxZoom: 18,
+  }).addTo(map);
+}
+
+// ベクトルタイルを使えない場合は、地図記号ありのラスタタイルで表示する。
+async function addBaseMap() {
+  if (!window.maplibregl || !L.maplibreGL) {
+    addRasterBaseMap();
+    return;
+  }
+  try {
+    const response = await fetch(PALE_VECTOR_STYLE);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const style = withoutMapSymbols(await response.json());
+    // 帰属表示は attributionControl.customAttribution から取られる（未指定だとスタイル側の表記で置き換わる）。
+    L.maplibreGL({style, attributionControl: {customAttribution: BASEMAP_ATTRIBUTION}}).addTo(map);
+  } catch (error) {
+    console.warn('ベクトルタイルを読み込めませんでした', error);
+    addRasterBaseMap();
+  }
+}
+
 function init() {
   if (!window.L) {
     $('map-error').textContent = '地図ライブラリを読み込めませんでした。インターネット接続を確認してください。';
     $('map-error').hidden = false;
     return;
   }
-  map = L.map('map').setView([35.681236, 139.767125], 11);
-  L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
-    attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a> | Places &copy; Overture Maps Foundation',
-    minZoom: 5, maxZoom: 18,
-  }).addTo(map);
+  map = L.map('map', {minZoom: 5, maxZoom: 18}).setView([35.681236, 139.767125], 11);
+  addBaseMap();
   placeLayer = L.layerGroup().addTo(map);
   map.on('click', (event) => setCenter(event.latlng.lat, event.latlng.lng));
   $('locate').addEventListener('click', locate);
