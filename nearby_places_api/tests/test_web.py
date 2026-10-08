@@ -53,7 +53,7 @@ class ApiTests(unittest.TestCase):
         self.assertFalse(body["partial_coverage"])
         self.assertEqual([place["id"] for place in body["places"]], ["near", "mid"])
         self.assertEqual(body["places"][0]["distance_m"], 100.0)
-        self.assertEqual(set(body["places"][0]), {"id", "name", "category", "source_category", "lat", "lon", "distance_m", "address"})
+        self.assertEqual(set(body["places"][0]), {"id", "name", "category", "source_category", "lat", "lon", "distance_m", "address", "website"})
 
     def test_category_and_limit(self):
         self.assertEqual(self.nearby(radius_m=1000, category="tourism")[1]["places"][0]["id"], "mid")

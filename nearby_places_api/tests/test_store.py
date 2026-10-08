@@ -1,12 +1,14 @@
 import json
 import math
+import sqlite3
 import tempfile
+from contextlib import closing
 import unittest
 from pathlib import Path
 
 from nearby_places_api.boundary import Boundary, load_tokyo_boundary
 from nearby_places_api.categories import classify
-from nearby_places_api.store import EARTH_RADIUS_M, PlaceStore, distance_m, import_places
+from nearby_places_api.store import EARTH_RADIUS_M, DataOutdated, PlaceStore, distance_m, import_places
 
 TOKYO_STATION = (35.681236, 139.767125)
 
@@ -137,6 +139,24 @@ class StoreTests(unittest.TestCase):
         self.assertEqual([p["id"] for p in self.store.nearby(*TOKYO_STATION, 500, "restaurant")], ["near", "inside"])
         self.assertEqual([p["id"] for p in self.store.nearby(*TOKYO_STATION, 500, "all", 1)], ["near"])
         self.assertEqual(self.store.nearby(*TOKYO_STATION, 50), [])
+
+    def test_website_keeps_first_http_url(self):
+        lat, lon = TOKYO_STATION
+        features = [
+            restaurant("site", lat, lon, websites=["javascript:alert(1)", "ftp://example.com", " https://example.com/menu "]),
+            restaurant("none", *north_of(lat, lon, 10), websites=["javascript:alert(1)"]),
+            restaurant("missing", *north_of(lat, lon, 20)),
+        ]
+        import_places([write_seq(self.directory.name, features)], self.database, TEST_BOUNDARY)
+        places = {place["id"]: place["website"] for place in self.store.nearby(lat, lon, 100)}
+        self.assertEqual(places, {"site": "https://example.com/menu", "none": None, "missing": None})
+
+    def test_database_from_older_version_is_reported(self):
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("ALTER TABLE places DROP COLUMN website")
+            connection.commit()
+        with self.assertRaises(DataOutdated):
+            self.store.nearby(*TOKYO_STATION, 500)
 
     def test_boundary_is_inclusive(self):
         lat, lon = TOKYO_STATION

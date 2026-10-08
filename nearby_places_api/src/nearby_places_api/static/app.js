@@ -29,8 +29,28 @@ function setCenter(lat, lon) {
   search();
 }
 
+// Only http(s) links are shown; the API filters too, but the page should not trust that alone.
+function safeUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function externalLink(href, text) {
+  const link = document.createElement('a');
+  link.href = href;
+  link.textContent = text;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  return link;
+}
+
 function popupContent(place) {
   const box = document.createElement('div');
+  box.className = 'popup';
   const name = document.createElement('strong');
   name.textContent = place.name ?? '（名称なし）';
   const detail = document.createElement('div');
@@ -40,6 +60,12 @@ function popupContent(place) {
     const address = document.createElement('div');
     address.textContent = place.address;
     box.append(address);
+  }
+  const website = safeUrl(place.website);
+  if (website) {
+    const line = document.createElement('div');
+    line.append(externalLink(website, 'ホームページ'));
+    box.append(line);
   }
   return box;
 }
@@ -67,7 +93,8 @@ function renderResults(body) {
     distance.textContent = `${place.distance_m} m`;
     const meta = document.createElement('span');
     meta.className = 'meta';
-    meta.textContent = [CATEGORY_LABELS[place.category], place.source_category, place.address].filter(Boolean).join(' ・ ');
+    meta.textContent = [CATEGORY_LABELS[place.category], place.source_category, place.address,
+      safeUrl(place.website) && 'HPあり'].filter(Boolean).join(' ・ ');
     button.append(name, distance, meta);
     button.addEventListener('click', () => {
       map.panTo(marker.getLatLng());

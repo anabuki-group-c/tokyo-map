@@ -7,6 +7,7 @@ import os
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from nearby_places_api.boundary import Boundary, boundary_from_json
 from nearby_places_api.categories import API_CATEGORIES, classify, source_category
@@ -24,7 +25,8 @@ CREATE TABLE places (
     source_category TEXT,
     lat REAL NOT NULL,
     lon REAL NOT NULL,
-    address TEXT
+    address TEXT,
+    website TEXT
 );
 CREATE VIRTUAL TABLE places_index USING rtree(rowid, min_lon, max_lon, min_lat, max_lat);
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -33,6 +35,10 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
 class DataNotReady(Exception):
     pass
+
+
+class DataOutdated(Exception):
+    """The database was imported by an older version and lacks newer columns."""
 
 
 def distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -75,7 +81,18 @@ def to_row(feature: dict) -> tuple | None:
     addresses = properties.get("addresses")
     address = addresses[0].get("freeform") if isinstance(addresses, list) and addresses and isinstance(addresses[0], dict) else None
     return (place_id, name if isinstance(name, str) else None, category, source_category(properties),
-            lat, lon, address if isinstance(address, str) else None)
+            lat, lon, address if isinstance(address, str) else None, first_website(properties))
+
+
+def first_website(properties: dict) -> str | None:
+    """The first http(s) URL in Overture's websites list. Other schemes (javascript: etc.) are dropped."""
+    websites = properties.get("websites")
+    for url in websites if isinstance(websites, list) else ():
+        if isinstance(url, str):
+            parts = urlsplit(url.strip())
+            if parts.scheme.lower() in ("http", "https") and parts.netloc:
+                return url.strip()
+    return None
 
 
 def import_places(sources: list[Path], database: Path, boundary: Boundary) -> dict:
@@ -99,7 +116,7 @@ def import_places(sources: list[Path], database: Path, boundary: Boundary) -> di
                     counts["outside"] += 1
                     continue
                 cursor = connection.execute(
-                    "INSERT OR IGNORE INTO places (id, name, category, source_category, lat, lon, address) VALUES (?, ?, ?, ?, ?, ?, ?)", row)
+                    "INSERT OR IGNORE INTO places (id, name, category, source_category, lat, lon, address, website) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", row)
                 if cursor.rowcount == 0:
                     counts["duplicates"] += 1
                     continue
@@ -152,19 +169,28 @@ class PlaceStore:
         min_lon, min_lat, max_lon, max_lat = search_bounds(lat, lon, radius_m)
         placeholders = ", ".join("?" for _ in categories)
         with self.connect() as connection:
-            rows = connection.execute(
-                f"""SELECT p.id, p.name, p.category, p.source_category, p.lat, p.lon, p.address
+            rows = self._execute(connection,
+                f"""SELECT p.id, p.name, p.category, p.source_category, p.lat, p.lon, p.address, p.website
                     FROM places_index AS i JOIN places AS p ON p.rowid = i.rowid
                     WHERE i.max_lon >= ? AND i.min_lon <= ? AND i.max_lat >= ? AND i.min_lat <= ?
                       AND p.category IN ({placeholders})""",
                 (min_lon, max_lon, min_lat, max_lat, *categories)).fetchall()
         places = []
-        for place_id, name, place_category, original, place_lat, place_lon, address in rows:
+        for place_id, name, place_category, original, place_lat, place_lon, address, website in rows:
             distance = distance_m(lat, lon, place_lat, place_lon)
             if distance <= radius_m:
                 places.append({
                     "id": place_id, "name": name, "category": place_category, "source_category": original,
                     "lat": place_lat, "lon": place_lon, "distance_m": distance, "address": address,
+                    "website": website,
                 })
         places.sort(key=lambda place: (place["distance_m"], place["id"]))
         return places[:limit]
+    @staticmethod
+    def _execute(connection, sql: str, parameters: tuple):
+        try:
+            return connection.execute(sql, parameters)
+        except sqlite3.OperationalError as error:
+            if "no such column" in str(error):
+                raise DataOutdated() from None
+            raise

@@ -106,7 +106,8 @@ GET /api/v1/places/nearby?lat=35.681236&lon=139.767125&radius_m=500&category=res
       "lat": 35.682,
       "lon": 139.768,
       "distance_m": 116.3,
-      "address": null
+      "address": null,
+      "website": "https://example.com/"
     }
   ]
 }
@@ -115,11 +116,12 @@ GET /api/v1/places/nearby?lat=35.681236&lon=139.767125&radius_m=500&category=res
 - `category` はAPIで定義する区分であり、Overtureの元の分類名は `source_category` として分けて返す。
 - `count` は今回返した件数。検索範囲内の全件数を意味しない。
 - 名称や住所の欠損は `null` とする。
+- `website` はOvertureの `websites` のうち最初の http(s) のURL。ない場合は `null`（2026-09-23.1 の取込では、飲食店の66.0%、観光地の32.6%にある）。
 - 半径の判定には丸める前の距離を使い、`distance_m` は表示用に丸める。
 - 該当する施設がない場合は、HTTP 200で `count: 0` と `places: []` を返す。
 - 東京都の範囲外を中心に指定した場合は、HTTP 400でエラーコード `OUT_OF_COVERAGE` を返す。
 - 検索円が東京都の外（他県や海）にかかる場合は `partial_coverage: true` を返す。都外の施設は結果に含まれない。判定は円周上の32点が都内にあるかで行う近似。
-- 施設データが未取込の場合は、HTTP 503でエラーコード `DATA_NOT_READY` を返す。
+- 施設データが未取込の場合は、HTTP 503でエラーコード `DATA_NOT_READY` を返す。`website` を保存する前の版で取り込んだデータの場合は、HTTP 503で `DATA_OUTDATED` を返す（取込をやり直す）。
 
 #### エラー例
 
@@ -195,6 +197,7 @@ APIの動作を目で確認するため、ブラウザで使える簡単な画�
 - 東京都の境界を点線で表示する（`GET /api/v1/places/coverage` で取得）。島しょ部まで含めると表示範囲が広すぎるため、初期表示は都心にする。
 - マーカーの色は、飲食店がオレンジ、観光地が青。一覧の項目を押すと、地図上でその施設の詳細を表示する。
 - 施設名などはテキストとして表示し、HTMLとしては解釈しない。
+- ホームページがある施設は、一覧に「HPあり」と表示し、詳細にリンクを出す（http・https のURLだけ）。
 
 ## 開発予定
 
@@ -262,7 +265,7 @@ cd nearby_places_api
 uv run places import data/raw/tokyo-places-*.geojsonseq --boundary data/raw/tokyo-division-area.geojsonseq
 ```
 
-`data/processed/places.sqlite` が作成されます。複数のファイルをまとめて取り込めます。境界ファイルから東京都の陸地のポリゴンを取り出し、その内側の施設だけを保存します。取込結果として、都外として除外した件数（`outside Tokyo`）も表示されます。
+`data/processed/places.sqlite` が作成されます。ホームページのURL（`website`）を追加する前に取り込んだデータは使えないため、取込をやり直してください。複数のファイルをまとめて取り込めます。境界ファイルから東京都の陸地のポリゴンを取り出し、その内側の施設だけを保存します。取込結果として、都外として除外した件数（`outside Tokyo`）も表示されます。
 
 ### 3. APIの起動
 
@@ -292,7 +295,7 @@ cd nearby_places_api
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-テストでは架空の施設データを使い、半径の内側・境界・外側の判定、東西方向の距離計算、分類の対応、閉業や重複の除外、距離順、件数上限、該当なし、不正入力、都外の地点、都の境界をまたぐ検索、境界ポリゴンの判定（穴・離島を含む）、行政区域データからの東京都の抽出を確認しています。
+テストでは架空の施設データを使い、半径の内側・境界・外側の判定、東西方向の距離計算、分類の対応、閉業や重複の除外、距離順、件数上限、該当なし、不正入力、都外の地点、都の境界をまたぐ検索、境界ポリゴンの判定（穴・離島を含む）、行政区域データからの東京都の抽出、ホームページのURLの取り出し（http・https 以外のURLの除外を含む）を確認しています。
 
 ## 参考資料
 

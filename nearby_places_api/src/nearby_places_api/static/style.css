@@ -27,6 +27,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .tourism{background:#1c7ed6}
 footer{font-size:10px;line-height:1.9;color:#6b7f87;margin-top:24px}
 footer a{color:inherit}
+.popup a{color:#1f7a63}
 .map-shell{position:relative;min-width:0}
 #map{height:100%}
 #map-error{position:absolute;z-index:900;top:16px;left:16px;right:16px;background:#fdecea;color:#8a1f11;padding:14px;border-radius:6px;font-size:13px}
