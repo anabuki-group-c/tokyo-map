@@ -1,0 +1,20 @@
+#:schema https://mise.jdx.dev/schema/mise.json
+
+[tools]
+python = "3.14"
+uv = "latest"
+
+# 注意: run の bash は PATH から解決されるため、WSL bash を拾わないよう
+# Git Bash を明示的に指定する（WSL からは Windows 側の uv が使えないため）。
+# PROGRA~1 は "Program Files" の8.3形式（cmd のクォート問題を回避）
+[tasks.setup]
+description = "環境構築（依存導入 → Overtureデータ取得 → SQLite取込）"
+run = "C:/PROGRA~1/Git/bin/bash.exe .mise/tasks/setup.sh"
+
+[tasks.dev]
+description = "API + 簡易UIを起動（http://127.0.0.1:8000/）"
+run = "C:/PROGRA~1/Git/bin/bash.exe .mise/tasks/dev.sh"
+
+[tasks.test]
+description = "テスト実行"
+run = "C:/PROGRA~1/Git/bin/bash.exe .mise/tasks/test.sh"
