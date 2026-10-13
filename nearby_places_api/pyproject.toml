@@ -1,0 +1,16 @@
+[project]
+name = "nearby-places-api"
+version = "0.1.0"
+description = "Nearby restaurant and tourism search API for Tokyo using Overture Maps Places"
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+places = "nearby_places_api.cli:main"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
