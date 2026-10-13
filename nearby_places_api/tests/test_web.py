@@ -118,6 +118,14 @@ class ApiTests(unittest.TestCase):
         self.assertEqual((status, body["error"]["code"]), (503, "DATA_NOT_READY"))
         self.assertEqual(self.get("/api/v1/places/coverage")[0], 503)
 
+    def test_empty_database_returns_json_error(self):
+        self.database.write_bytes(b"")
+        for path, params in (("/api/v1/places/nearby", {"lat": TOKYO_STATION[0], "lon": TOKYO_STATION[1], "radius_m": 100}),
+                             ("/api/v1/places/coverage", {})):
+            with self.subTest(path=path):
+                status, body = self.get(path, **params)
+                self.assertEqual((status, body["error"]["code"]), (503, "DATA_INVALID"))
+
 
 if __name__ == "__main__":
     unittest.main()

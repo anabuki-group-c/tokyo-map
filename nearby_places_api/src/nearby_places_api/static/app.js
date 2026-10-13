@@ -26,7 +26,19 @@ function setCenter(lat, lon) {
   $('submit').disabled = apiBase === null;
   if (centerMarker) centerMarker.setLatLng([lat, lon]);
   else centerMarker = L.marker([lat, lon], {title: '検索の中心'}).addTo(map);
+  // Results and the circle belong to the old center; drop them even if the new search stops at validation.
+  clearResults();
+  if (circle) {
+    circle.remove();
+    circle = null;
+  }
   search();
+}
+
+function clearResults() {
+  placeLayer.clearLayers();
+  markers = new Map();
+  $('results').replaceChildren();
 }
 
 // Only http(s) links are shown; the API filters too, but the page should not trust that alone.
@@ -71,10 +83,8 @@ function popupContent(place) {
 }
 
 function renderResults(body) {
-  placeLayer.clearLayers();
-  markers = new Map();
+  clearResults();
   const list = $('results');
-  list.replaceChildren();
   for (const place of body.places) {
     const marker = L.circleMarker([place.lat, place.lon], {
       radius: 7, weight: 2, color: '#fff', fillColor: CATEGORY_COLORS[place.category], fillOpacity: 0.9,
@@ -108,6 +118,8 @@ function renderResults(body) {
 
 async function search(event) {
   event?.preventDefault();
+  // Invalidate any search in flight first, so its response cannot be shown if this one stops early.
+  const current = ++requestId;
   if (apiBase === null) {
     showMessage('APIに接続できませんでした。`uv run places serve` でサーバを起動してください。', 'error');
     return;
@@ -123,20 +135,21 @@ async function search(event) {
   });
   if (circle) circle.setLatLng([center.lat, center.lon]).setRadius(radius);
   else circle = L.circle([center.lat, center.lon], {radius, color: '#1f7a63', weight: 2, fillOpacity: 0.06}).addTo(map);
-  const current = ++requestId;
   showMessage('検索中…');
   let response, body;
   try {
     response = await fetch(`${apiBase}/api/v1/places/nearby?${params}`);
     body = await response.json();
   } catch {
-    if (current === requestId) showMessage('APIに接続できませんでした。サーバが起動しているか確認してください。', 'error');
+    if (current === requestId) {
+      clearResults();
+      showMessage('APIに接続できませんでした。サーバが起動しているか確認してください。', 'error');
+    }
     return;
   }
   if (current !== requestId) return;  // A newer search has started.
   if (!response.ok) {
-    placeLayer.clearLayers();
-    $('results').replaceChildren();
+    clearResults();
     showMessage(body.error?.message ?? `エラーが発生しました（HTTP ${response.status}）。`, 'error');
     return;
   }

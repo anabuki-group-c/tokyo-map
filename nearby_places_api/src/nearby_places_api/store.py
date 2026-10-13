@@ -41,6 +41,10 @@ class DataOutdated(Exception):
     """The database was imported by an older version and lacks newer columns."""
 
 
+class DataInvalid(Exception):
+    """The database file is empty, broken, or not one written by import_places."""
+
+
 def distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle (haversine) distance in metres."""
     p1, p2 = math.radians(lat1), math.radians(lat2)
@@ -89,7 +93,10 @@ def first_website(properties: dict) -> str | None:
     websites = properties.get("websites")
     for url in websites if isinstance(websites, list) else ():
         if isinstance(url, str):
-            parts = urlsplit(url.strip())
+            try:
+                parts = urlsplit(url.strip())
+            except ValueError:  # e.g. "https://[broken"
+                continue
             if parts.scheme.lower() in ("http", "https") and parts.netloc:
                 return url.strip()
     return None
@@ -157,10 +164,14 @@ class PlaceStore:
         key = (stat.st_mtime_ns, stat.st_size)
         if key != self._boundary_key:
             with self.connect() as connection:
-                row = connection.execute("SELECT value FROM meta WHERE key = 'boundary'").fetchone()
+                row = self._execute(connection, "SELECT value FROM meta WHERE key = 'boundary'", ()).fetchone()
             if row is None:
-                raise DataNotReady()
-            self._boundary, self._boundary_key = boundary_from_json(row[0]), key
+                raise DataInvalid()
+            try:
+                boundary = boundary_from_json(row[0])
+            except (ValueError, KeyError, TypeError):
+                raise DataInvalid() from None
+            self._boundary, self._boundary_key = boundary, key
         return self._boundary
 
     def nearby(self, lat: float, lon: float, radius_m: float, category: str = "all", limit: int = 20) -> list[dict]:
@@ -186,11 +197,13 @@ class PlaceStore:
                 })
         places.sort(key=lambda place: (place["distance_m"], place["id"]))
         return places[:limit]
+
     @staticmethod
     def _execute(connection, sql: str, parameters: tuple):
         try:
             return connection.execute(sql, parameters)
-        except sqlite3.OperationalError as error:
+        except sqlite3.DatabaseError as error:
+            # Covers "no such table" (e.g. an empty file) and "file is not a database".
             if "no such column" in str(error):
                 raise DataOutdated() from None
-            raise
+            raise DataInvalid() from None

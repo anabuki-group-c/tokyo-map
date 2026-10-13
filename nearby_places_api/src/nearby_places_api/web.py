@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from nearby_places_api.categories import API_CATEGORIES
-from nearby_places_api.store import EARTH_RADIUS_M, DataNotReady, DataOutdated, PlaceStore
+from nearby_places_api.store import EARTH_RADIUS_M, DataInvalid, DataNotReady, DataOutdated, PlaceStore
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).parent / "static"
@@ -118,6 +118,8 @@ def make_handler(store: PlaceStore):
                 status, body = 503, error_body("DATA_NOT_READY", "施設データが未取込です。places import を実行してください。")
             except DataOutdated:
                 status, body = 503, error_body("DATA_OUTDATED", "施設データが古い形式です。places import を実行し直してください。")
+            except DataInvalid:
+                status, body = 503, error_body("DATA_INVALID", "施設データを読み込めません。places import を実行し直してください。")
             self.respond_json(status, body)
 
         def respond_json(self, status, data):

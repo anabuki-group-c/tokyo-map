@@ -8,7 +8,7 @@ from pathlib import Path
 
 from nearby_places_api.boundary import Boundary, load_tokyo_boundary
 from nearby_places_api.categories import classify
-from nearby_places_api.store import EARTH_RADIUS_M, DataOutdated, PlaceStore, distance_m, import_places
+from nearby_places_api.store import EARTH_RADIUS_M, DataInvalid, DataOutdated, PlaceStore, distance_m, import_places
 
 TOKYO_STATION = (35.681236, 139.767125)
 
@@ -146,10 +146,12 @@ class StoreTests(unittest.TestCase):
             restaurant("site", lat, lon, websites=["javascript:alert(1)", "ftp://example.com", " https://example.com/menu "]),
             restaurant("none", *north_of(lat, lon, 10), websites=["javascript:alert(1)"]),
             restaurant("missing", *north_of(lat, lon, 20)),
+            restaurant("broken", *north_of(lat, lon, 30), websites=["https://[broken", "https://example.com/"]),
         ]
         import_places([write_seq(self.directory.name, features)], self.database, TEST_BOUNDARY)
         places = {place["id"]: place["website"] for place in self.store.nearby(lat, lon, 100)}
-        self.assertEqual(places, {"site": "https://example.com/menu", "none": None, "missing": None})
+        self.assertEqual(places, {"site": "https://example.com/menu", "none": None, "missing": None,
+                                  "broken": "https://example.com/"})
 
     def test_database_from_older_version_is_reported(self):
         with closing(sqlite3.connect(self.database)) as connection:
@@ -157,6 +159,16 @@ class StoreTests(unittest.TestCase):
             connection.commit()
         with self.assertRaises(DataOutdated):
             self.store.nearby(*TOKYO_STATION, 500)
+
+    def test_empty_or_broken_database_is_reported(self):
+        for content in (b"", b"not a database"):
+            with self.subTest(content=content):
+                self.database.write_bytes(content)
+                store = PlaceStore(self.database)
+                with self.assertRaises(DataInvalid):
+                    store.boundary()
+                with self.assertRaises(DataInvalid):
+                    store.nearby(*TOKYO_STATION, 500)
 
     def test_boundary_is_inclusive(self):
         lat, lon = TOKYO_STATION
@@ -213,6 +225,12 @@ class BoundaryTests(unittest.TestCase):
             path = write_seq(directory, [area("JP-14", "land", square(139.0, 35.0, 139.5, 35.5))] * 2)
             with self.assertRaises(ValueError):
                 load_tokyo_boundary(path)
+            # A single feature is accepted as a custom boundary, but not one labelled as another prefecture.
+            path = write_seq(directory, [area("JP-14", "land", square(139.0, 35.0, 139.5, 35.5))])
+            with self.assertRaises(ValueError):
+                load_tokyo_boundary(path)
+            path = write_seq(directory, [{"type": "Feature", "geometry": {"type": "Polygon", "coordinates": square(139.0, 35.0, 139.5, 35.5)}}])
+            self.assertEqual(load_tokyo_boundary(path).bbox, (139.0, 35.0, 139.5, 35.5))
 
 
 if __name__ == "__main__":

@@ -74,7 +74,8 @@ class Boundary:
 def load_tokyo_boundary(path: Path) -> Boundary:
     """Read Tokyo's land area from an Overture division_area file.
 
-    A file holding a single Polygon/MultiPolygon feature is also accepted.
+    A file holding a single Polygon/MultiPolygon feature is also accepted,
+    unless its properties name a region other than Tokyo.
     """
     features = [feature for feature in read_features(path) if isinstance(feature, dict)]
     for feature in features:
@@ -83,6 +84,9 @@ def load_tokyo_boundary(path: Path) -> Boundary:
                 and properties.get("class") == "land"):
             return Boundary(feature["geometry"])
     if len(features) == 1:
+        region = (features[0].get("properties") or {}).get("region")
+        if region not in (None, TOKYO_REGION):
+            raise ValueError(f"{path.name} is the boundary of region {region}, not Tokyo ({TOKYO_REGION})")
         return Boundary(features[0]["geometry"])
     raise ValueError(f"Tokyo land area (region {TOKYO_REGION}, subtype region, class land) was not found in {path.name}")
 
