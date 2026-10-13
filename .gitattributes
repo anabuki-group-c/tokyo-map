@@ -1,0 +1,3 @@
+# シェルスクリプトはLF固定（WindowsのCRLF変換でbashが壊れるのを防ぐ）
+*.sh text eol=lf
+.mise.toml text eol=lf
