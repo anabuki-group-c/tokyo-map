@@ -257,7 +257,8 @@ def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None
     return Handler
 
 
-def serve(host="127.0.0.1", port=8000):
+def build_handler():
+    """Create the handler and its background services. Set stop on each service at shutdown."""
     processed = ROOT / "data" / "processed"
     cache = StatusCache(processed / "realtime" / "web-status-cache.json", os.environ.get("ODPT_CONSUMER_KEY", ""))
     key = os.environ.get("ODPT_CONSUMER_KEY", "")
@@ -276,13 +277,18 @@ def serve(host="127.0.0.1", port=8000):
         return StatusCache(processed / "realtime" / f"gtfs-refresh-{mode}.json", token, ttl=86400, fetch=fetch)
 
     extras = ExtraService(ROOT, extra_cache)
-    server = ThreadingHTTPServer((host, port), make_handler(cache, processed, trains, stations, estimates, extras))
+    return make_handler(cache, processed, trains, stations, estimates, extras), (estimates, extras)
+
+
+def serve(host="127.0.0.1", port=8000):
+    handler, services = build_handler()
+    server = ThreadingHTTPServer((host, port), handler)
     print(f"Tokyo Metro map: http://{host}:{port} (Ctrl+C to stop)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        estimates.stop.set()
-        extras.stop.set()
+        for service in services:
+            service.stop.set()
         server.server_close()

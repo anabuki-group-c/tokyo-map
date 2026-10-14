@@ -1,0 +1,24 @@
+[project]
+name = "integrated-api"
+version = "0.1.0"
+description = "Serve the nearby places API and the transit map API from one server"
+requires-python = ">=3.14"
+dependencies = [
+    "nearby-places-api",
+    "transit-experiment",
+]
+
+[project.scripts]
+integrated = "integrated_api.cli:main"
+
+[tool.uv]
+package = true
+
+# editable: each package finds its data/ folder relative to its own source.
+[tool.uv.sources]
+nearby-places-api = { path = "../nearby_places_api", editable = true }
+transit-experiment = { path = "../transit_experiment", editable = true }
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"

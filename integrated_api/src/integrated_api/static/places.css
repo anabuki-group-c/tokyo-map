@@ -1,0 +1,23 @@
+/* Nearby place search panel, in the transit map's dark theme (transit style.css loads first). */
+#places-panel{padding-bottom:22px;margin-bottom:22px;border-bottom:1px solid #273138}
+#places-panel label{display:block;font-size:11px;font-weight:600;color:#96aab4;margin:12px 0 6px}
+#places-panel input{display:block;width:100%;padding:11px;border:1px solid #344951;border-radius:6px;background:#1b2c32;color:#e7efed;font:inherit;font-size:13px}
+#places-panel select{margin:0}
+#places-panel input:focus-visible,#places-panel select:focus-visible{outline:2px solid #81e5c3;outline-offset:2px}
+#place-locate,.place-actions button{width:100%;padding:11px;border:1px solid #344951;border-radius:6px;background:#1b2c32;font-size:12px}
+.place-actions{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:16px}
+#place-submit{background:#81e5c3;border-color:#81e5c3;color:#0b1419;font-weight:700}
+#places-panel button:disabled{opacity:.5;cursor:not-allowed}
+#place-message{font-size:12px;line-height:1.7;margin:14px 0 6px}
+#place-message.error,#place-message.warning{background:#44351d;color:#ffda9a;padding:10px 12px;border-radius:6px}
+#place-results{list-style:none;padding:0;margin:0}
+#place-results li{border-bottom:1px solid #23323a}
+#place-results button{display:grid;grid-template-columns:1fr auto;gap:2px 10px;width:100%;text-align:left;border:0;background:transparent;padding:10px 4px}
+#place-results button:hover{background:#1c2b32}
+#place-results .name{font-size:13px;font-weight:600}
+#place-results .distance{font-size:12px;color:#81e5c3;font-variant-numeric:tabular-nums}
+#place-results .meta{grid-column:1/3;font-size:10px;color:#96aab4}
+#place-results .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+#place-results .restaurant{background:#ff8a4c}
+#place-results .tourism{background:#4dabf7}
+.popup a{color:#81e5c3}
