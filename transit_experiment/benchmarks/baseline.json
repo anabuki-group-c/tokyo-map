@@ -1,0 +1,101 @@
+[
+ {
+  "scenario": "新宿→東京 120分 全線",
+  "start": "新宿",
+  "goal": "東京",
+  "budget": 120,
+  "status": "time_limit",
+  "minutes": 119.9,
+  "budget_ratio": 0.999,
+  "wall_seconds": 3.035,
+  "explored": 315392
+ },
+ {
+  "scenario": "新宿→東京 180分 全線",
+  "start": "新宿",
+  "goal": "東京",
+  "budget": 180,
+  "status": "optimal",
+  "minutes": 180.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.294,
+  "explored": 20262
+ },
+ {
+  "scenario": "渋谷→上野 120分 全線",
+  "start": "渋谷",
+  "goal": "上野",
+  "budget": 120,
+  "status": "optimal",
+  "minutes": 120.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.089,
+  "explored": 8915
+ },
+ {
+  "scenario": "池袋→品川 180分 全線",
+  "start": "池袋",
+  "goal": "品川",
+  "budget": 180,
+  "status": "time_limit",
+  "minutes": 179.9,
+  "budget_ratio": 0.999,
+  "wall_seconds": 3.071,
+  "explored": 290816
+ },
+ {
+  "scenario": "東京→両国 240分 全線",
+  "start": "東京",
+  "goal": "両国",
+  "budget": 240,
+  "status": "time_limit",
+  "minutes": 240.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 3.051,
+  "explored": 352256
+ },
+ {
+  "scenario": "浅草→新宿 240分 全線",
+  "start": "浅草",
+  "goal": "新宿",
+  "budget": 240,
+  "status": "optimal",
+  "minutes": 240.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.045,
+  "explored": 2115
+ },
+ {
+  "scenario": "新宿→新宿 120分 一周",
+  "start": "新宿",
+  "goal": "新宿",
+  "budget": 120,
+  "status": "optimal",
+  "minutes": 120.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.026,
+  "explored": 493
+ },
+ {
+  "scenario": "渋谷→上野 120分 鉄道のみ",
+  "start": "渋谷",
+  "goal": "上野",
+  "budget": 120,
+  "status": "optimal",
+  "minutes": 120.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.084,
+  "explored": 8915
+ },
+ {
+  "scenario": "東京→両国 240分 バスのみ",
+  "start": "東京",
+  "goal": "両国",
+  "budget": 240,
+  "status": "time_limit",
+  "minutes": 240.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 3.04,
+  "explored": 356352
+ }
+]

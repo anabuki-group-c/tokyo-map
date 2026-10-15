@@ -183,8 +183,25 @@ class StatusCache:
             }
 
 
-def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None, estimates=None, extras=None):
+def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None, estimates=None, extras=None, longpath_service=None):
     class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            if urlsplit(self.path).path != "/api/route/plan" or longpath_service is None:
+                self.respond(404, b"Not found", "text/plain")
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 1_000_000:
+                    raise ValueError
+                body = json.loads(self.rfile.read(length))
+                if not isinstance(body, dict):
+                    raise ValueError
+                result = longpath_service.plan(body)
+            except (ValueError, TypeError, KeyError):
+                self.respond(400, b"Invalid request body", "text/plain")
+                return
+            self.respond(200, json.dumps(result, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+
         def do_GET(self):
             path = urlsplit(self.path).path
             if path in ("/api/extra-network", "/api/extra-positions") and extras is not None:
@@ -212,6 +229,9 @@ def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None
                 result = train_positions(trains.get(), stations.get())
                 self.respond(200, json.dumps(result, ensure_ascii=False).encode(), "application/json; charset=utf-8")
                 return
+            if path == "/api/route/network" and longpath_service is not None:
+                self.respond(200, json.dumps(longpath_service.get_network(), ensure_ascii=False).encode(), "application/json; charset=utf-8")
+                return
             if path == "/api/status":
                 self.respond(200, json.dumps(cache.get(), ensure_ascii=False).encode(), "application/json; charset=utf-8")
                 return
@@ -221,6 +241,8 @@ def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None
                 "/trains.js": (STATIC / "trains.js", "text/javascript; charset=utf-8"),
                 "/extras.js": (STATIC / "extras.js", "text/javascript; charset=utf-8"),
                 "/all.js": (STATIC / "all.js", "text/javascript; charset=utf-8"),
+                "/route": (STATIC / "route.html", "text/html; charset=utf-8"),
+                "/route.js": (STATIC / "route.js", "text/javascript; charset=utf-8"),
                 "/style.css": (STATIC / "style.css", "text/css; charset=utf-8"),
                 "/data/railroads": (processed / "tokyo-metro-railroads.geojson", "application/geo+json"),
                 "/data/stations": (processed / "tokyo-metro-stations.geojson", "application/geo+json"),
@@ -276,7 +298,11 @@ def serve(host="127.0.0.1", port=8000):
         return StatusCache(processed / "realtime" / f"gtfs-refresh-{mode}.json", token, ttl=86400, fetch=fetch)
 
     extras = ExtraService(ROOT, extra_cache)
-    server = ThreadingHTTPServer((host, port), make_handler(cache, processed, trains, stations, estimates, extras))
+    from transit_experiment.longpath import Service as LongPathService
+
+    longpath_service = LongPathService(
+        processed, key, compute_seconds=float(os.environ.get("LONGPATH_COMPUTE_SECONDS", "3")))
+    server = ThreadingHTTPServer((host, port), make_handler(cache, processed, trains, stations, estimates, extras, longpath_service))
     print(f"Tokyo Metro map: http://{host}:{port} (Ctrl+C to stop)", flush=True)
     try:
         server.serve_forever()

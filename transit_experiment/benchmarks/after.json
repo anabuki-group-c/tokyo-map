@@ -1,0 +1,389 @@
+[
+ {
+  "scenario": "新宿→東京 120分 全線",
+  "start": "新宿",
+  "goal": "東京",
+  "budget": 120,
+  "status": "optimal",
+  "minutes": 120.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.0258,
+  "explored": 116,
+  "runs": [
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0273,
+    "explored": 116,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0255,
+    "explored": 116,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0258,
+    "explored": 116,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0244,
+    "explored": 116,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0259,
+    "explored": 116,
+    "status": "optimal"
+   }
+  ]
+ },
+ {
+  "scenario": "新宿→東京 180分 全線",
+  "start": "新宿",
+  "goal": "東京",
+  "budget": 180,
+  "status": "optimal",
+  "minutes": 180.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.0284,
+  "explored": 588,
+  "runs": [
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.0238,
+    "explored": 588,
+    "status": "optimal"
+   },
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.0284,
+    "explored": 588,
+    "status": "optimal"
+   },
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.0311,
+    "explored": 588,
+    "status": "optimal"
+   },
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.0295,
+    "explored": 588,
+    "status": "optimal"
+   },
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.0262,
+    "explored": 588,
+    "status": "optimal"
+   }
+  ]
+ },
+ {
+  "scenario": "渋谷→上野 120分 全線",
+  "start": "渋谷",
+  "goal": "上野",
+  "budget": 120,
+  "status": "optimal",
+  "minutes": 120.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.0261,
+  "explored": 325,
+  "runs": [
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0261,
+    "explored": 325,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.024,
+    "explored": 325,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0273,
+    "explored": 325,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0207,
+    "explored": 325,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0289,
+    "explored": 325,
+    "status": "optimal"
+   }
+  ]
+ },
+ {
+  "scenario": "池袋→品川 180分 全線",
+  "start": "池袋",
+  "goal": "品川",
+  "budget": 180,
+  "status": "optimal",
+  "minutes": 180.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.0258,
+  "explored": 526,
+  "runs": [
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.023,
+    "explored": 526,
+    "status": "optimal"
+   },
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.0266,
+    "explored": 526,
+    "status": "optimal"
+   },
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.0227,
+    "explored": 526,
+    "status": "optimal"
+   },
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.0276,
+    "explored": 526,
+    "status": "optimal"
+   },
+   {
+    "minutes": 180.0,
+    "wall_seconds": 0.0258,
+    "explored": 526,
+    "status": "optimal"
+   }
+  ]
+ },
+ {
+  "scenario": "東京→両国 240分 全線",
+  "start": "東京",
+  "goal": "両国",
+  "budget": 240,
+  "status": "optimal",
+  "minutes": 240.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.0218,
+  "explored": 153,
+  "runs": [
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0283,
+    "explored": 153,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0214,
+    "explored": 153,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0218,
+    "explored": 153,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0234,
+    "explored": 153,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0201,
+    "explored": 153,
+    "status": "optimal"
+   }
+  ]
+ },
+ {
+  "scenario": "浅草→新宿 240分 全線",
+  "start": "浅草",
+  "goal": "新宿",
+  "budget": 240,
+  "status": "optimal",
+  "minutes": 240.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.0272,
+  "explored": 327,
+  "runs": [
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0257,
+    "explored": 327,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0272,
+    "explored": 327,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0296,
+    "explored": 327,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0321,
+    "explored": 327,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0265,
+    "explored": 327,
+    "status": "optimal"
+   }
+  ]
+ },
+ {
+  "scenario": "新宿→新宿 120分 一周",
+  "start": "新宿",
+  "goal": "新宿",
+  "budget": 120,
+  "status": "optimal",
+  "minutes": 120.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.0295,
+  "explored": 681,
+  "runs": [
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0235,
+    "explored": 681,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0256,
+    "explored": 681,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0329,
+    "explored": 681,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0337,
+    "explored": 681,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0295,
+    "explored": 681,
+    "status": "optimal"
+   }
+  ]
+ },
+ {
+  "scenario": "渋谷→上野 120分 鉄道のみ",
+  "start": "渋谷",
+  "goal": "上野",
+  "budget": 120,
+  "status": "optimal",
+  "minutes": 120.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.0162,
+  "explored": 2513,
+  "runs": [
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0171,
+    "explored": 2513,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0162,
+    "explored": 2513,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0174,
+    "explored": 2513,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0162,
+    "explored": 2513,
+    "status": "optimal"
+   },
+   {
+    "minutes": 120.0,
+    "wall_seconds": 0.0151,
+    "explored": 2513,
+    "status": "optimal"
+   }
+  ]
+ },
+ {
+  "scenario": "東京→両国 240分 バスのみ",
+  "start": "東京",
+  "goal": "両国",
+  "budget": 240,
+  "status": "optimal",
+  "minutes": 240.0,
+  "budget_ratio": 1.0,
+  "wall_seconds": 0.0327,
+  "explored": 3056,
+  "runs": [
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0327,
+    "explored": 3056,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0336,
+    "explored": 3056,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0336,
+    "explored": 3056,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.0324,
+    "explored": 3056,
+    "status": "optimal"
+   },
+   {
+    "minutes": 240.0,
+    "wall_seconds": 0.021,
+    "explored": 3056,
+    "status": "optimal"
+   }
+  ]
+ }
+]

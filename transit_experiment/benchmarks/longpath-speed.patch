@@ -1,0 +1,67 @@
+--- a/transit_experiment/src/transit_experiment/longpath.py
++++ b/transit_experiment/src/transit_experiment/longpath.py
+@@ -308,15 +308,22 @@
+     # 同じ両端の区間は路線違いでも共通の資源。別系統で逆走する抜け道を塞ぐ。
+     pairs = [tuple(sorted((e["u"], e["v"]))) for e in network.edges]
+     resources = {pair: i for i, pair in enumerate(dict.fromkeys(pairs))}
+-    bits = [1 << resources[pair] for pair in pairs]
++    edge_resources = [resources[pair] for pair in pairs]
+     used_pairs = {pairs[i] for i in used_edges}
+     node_ids = list(network.nodes)
+     index_of = {node_id: i for i, node_id in enumerate(node_ids)}
+     incident = [[] for _ in node_ids]
++    seen = set()
+     for edge_id, edge in enumerate(network.edges):
+         if pairs[edge_id] in used_pairs or (allowed is not None and edge["route"] not in allowed):
+             continue
+         u, v, weight = index_of[edge["u"]], index_of[edge["v"]], round(edge["minutes"] * 10)
++        # フィルター後、同一区間・同時間は同じ探索状態に至るので代表路線だけ残す。
++        # 時間が違う並行辺は締切への収まり方が異なるため、どちらも必要。
++        equivalent = (resources[pairs[edge_id]], weight)
++        if equivalent in seen:
++            continue
++        seen.add(equivalent)
+         incident[u].append((edge_id, v, weight))
+         incident[v].append((edge_id, u, weight))
+     for neighbours in incident:
+@@ -337,30 +344,35 @@
+     path, nodes = [], [source]
+     # ponytail: DFSは指数時間。時間上限で暫定解を返す。大規模化時はビーム探索等へ。
+     # 明示スタックで長い経路にも対応し、HTTPスレッド間の再帰上限変更を避ける。
+-    stack = [(source, 0, 0, iter(incident[source]))]
++    # DFSの現経路だけを保持するので巨大整数マスクの複製は不要。
++    # 各区間の占有をpush/popと対にして更新する（並行辺も同じ使用権）。
++    occupied = bytearray(len(resources))
++    stack = [(source, 0, iter(incident[source]))]
+     explored, status = 0, "optimal"
+     while stack and best_gain < budget:
+         if explored % 128 == 0 and clock() >= deadline:
+             status = "time_limit"
+             break
+-        node, elapsed, mask, choices = stack[-1]
++        node, elapsed, choices = stack[-1]
+         choice = next(choices, None)
+         if choice is None:
+             stack.pop()
+             if path:
+-                path.pop()
++                occupied[edge_resources[path.pop()]] = 0
+                 nodes.pop()
+             continue
+         explored += 1
+         edge_id, neighbour, weight = choice
+-        if mask & bits[edge_id] or elapsed + weight + lower[neighbour] > budget:
++        resource = edge_resources[edge_id]
++        if occupied[resource] or elapsed + weight + lower[neighbour] > budget:
+             continue
+         gain = elapsed + weight
+         path.append(edge_id)
+         nodes.append(neighbour)
+         if neighbour == target and gain > best_gain:
+             best_gain, best_path, best_nodes = gain, path.copy(), nodes.copy()
+-        stack.append((neighbour, gain, mask | bits[edge_id], iter(incident[neighbour])))
++        occupied[resource] = 1
++        stack.append((neighbour, gain, iter(incident[neighbour])))
+     result.update(status=status, minutes=best_gain / 10, edges=best_path,
+                   nodes=[node_ids[i] for i in best_nodes], explored=explored, compute_seconds=limit)
+     return result
