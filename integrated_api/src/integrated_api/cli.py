@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from dotenv import load_dotenv
-from transit_experiment.cli import PROJECT_ROOT as TRANSIT_ROOT
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> None:
-    # The ODPT keys stay in transit_experiment/.env; there is no separate copy here.
-    load_dotenv(TRANSIT_ROOT / ".env")
+    # The ODPT keys for this server live in integrated_api/.env (gitignored).
+    load_dotenv(PROJECT_ROOT / ".env")
     parser = argparse.ArgumentParser(description="Serve the nearby places API and the transit map API together")
     subcommands = parser.add_subparsers(dest="command", required=True)
     web_parser = subcommands.add_parser("serve", help="Start both APIs on one port")

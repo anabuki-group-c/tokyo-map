@@ -3,7 +3,7 @@
 // wrapped in a function so its names do not collide with the transit scripts' globals (map, select, ...).
 (() => {
   const CATEGORY_LABELS = {restaurant: '飲食店', tourism: '観光地'};
-  const CATEGORY_COLORS = {restaurant: '#ff8a4c', tourism: '#4dabf7'};
+  const CATEGORY_COLORS = {restaurant: '#d9480f', tourism: '#1c7ed6'};
   const $ = (id) => document.getElementById(id);
 
   let center = null;
@@ -19,9 +19,9 @@
     $('place-message').className = kind;
   }
 
-  function setCenter(lat, lon) {
+  function setCenter(lat, lon, label = null) {
     center = {lat, lon};
-    $('place-center').textContent = `中心：${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    $('place-center').textContent = `中心：${label ?? `${lat.toFixed(6)}, ${lon.toFixed(6)}`}`;
     $('place-submit').disabled = !ready;
     if (centerMarker) centerMarker.setLatLng([lat, lon]);
     else centerMarker = L.marker([lat, lon], {title: '検索の中心'}).addTo(map);
@@ -82,6 +82,13 @@
       line.append(link);
       box.append(line);
     }
+    const route = document.createElement('button');
+    route.type = 'button';
+    route.className = 'popup-action';
+    route.textContent = 'ここへの遠回り経路';
+    // journey.js listens for this; places.js does not need to know about routes.
+    route.addEventListener('click', () => map.fire('placeselect', {place}));
+    box.append(route);
     return box;
   }
 
@@ -136,7 +143,7 @@
     });
     if (circle) circle.setLatLng([center.lat, center.lon]).setRadius(radius);
     // Not interactive, so clicks inside the circle still move the center.
-    else circle = L.circle([center.lat, center.lon], {radius, renderer, interactive: false, color: '#81e5c3', weight: 2, fillOpacity: 0.06}).addTo(map);
+    else circle = L.circle([center.lat, center.lon], {radius, renderer, interactive: false, color: '#1f7a63', weight: 2, fillOpacity: 0.06}).addTo(map);
     showMessage('検索中…');
     let response, body;
     try {
@@ -186,22 +193,73 @@
       }
       ready = true;
       $('place-submit').disabled = !center;
-      L.geoJSON(body.boundary, {renderer, style: {color: '#8ca3ac', weight: 1.5, dashArray: '4 4', fill: false}, interactive: false}).addTo(map);
+      L.geoJSON(body.boundary, {renderer, style: {color: '#5d7079', weight: 1.5, dashArray: '4 4', fill: false}, interactive: false}).addTo(map);
     } catch {
       showMessage('施設検索APIに接続できませんでした。サーバが起動しているか確認してください。', 'error');
+    }
+  }
+
+  const BASEMAP_ATTRIBUTION = '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a> | Places &copy; Overture Maps Foundation';
+  const PALE_VECTOR_STYLE = 'https://gsi-cyberjapan.github.io/gsivectortile-mapbox-gl-js/pale.json';
+
+  // 地理院ベクトルタイルの淡色地図から地図記号（アイコン）を除く。文字の注記は残す。
+  function withoutMapSymbols(style) {
+    const layers = [];
+    for (const layer of style.layers) {
+      const layout = layer.layout || {};
+      if (layer.type !== 'symbol' || !('icon-image' in layout)) {
+        layers.push(layer);
+      } else if ('text-field' in layout) {
+        const {'icon-image': _icon, ...rest} = layout;
+        layers.push({...layer, layout: rest});
+      }
+    }
+    return {...style, layers};
+  }
+
+  function addRasterBaseMap() {
+    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+      attribution: BASEMAP_ATTRIBUTION, minZoom: 5, maxZoom: 18,
+    }).addTo(map);
+  }
+
+  // The page's basemap (app.js skips its dark tiles because #map has data-basemap).
+  // ベクトルタイルを使えない場合は、地図記号ありのラスタタイルで表示する。
+  async function addBaseMap() {
+    map.setMinZoom(5).setMaxZoom(18);
+    if (!window.maplibregl || !L.maplibreGL) {
+      addRasterBaseMap();
+      return;
+    }
+    try {
+      const response = await fetch(PALE_VECTOR_STYLE);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const style = withoutMapSymbols(await response.json());
+      // 帰属表示は attributionControl.customAttribution から取られる（未指定だとスタイル側の表記で置き換わる）。
+      L.maplibreGL({style, attributionControl: {customAttribution: BASEMAP_ATTRIBUTION}}).addTo(map);
+    } catch (error) {
+      console.warn('ベクトルタイルを読み込めませんでした', error);
+      addRasterBaseMap();
     }
   }
 
   function init() {
     // app.js creates the map synchronously; it stays null when Leaflet failed to load (app.js shows that error).
     if (!map) return;
+    addBaseMap();
     // Above the transit lines, stations and train arrows. SVG, not Canvas: a Canvas in a higher pane
     // would swallow clicks meant for the transit layers below it.
     map.createPane('places').style.zIndex = 450;
     renderer = L.svg({pane: 'places'});
     placeLayer = L.layerGroup().addTo(map);
-    // Clicks on routes and stations are stopped by the Canvas renderer, so only empty map space sets the center.
+    // Clicks on routes, stations, arrows and place markers would otherwise also fire a map click and move the
+    // center; the transit scripts have no map click handler, so this default changes nothing for them.
+    // Both are needed: Path sets its own default, and L.geoJSON passes the Layer default to the lines it makes.
+    L.Layer.mergeOptions({bubblingMouseEvents: false});
+    L.Path.mergeOptions({bubblingMouseEvents: false});
     map.on('click', (event) => setCenter(event.latlng.lat, event.latlng.lng));
+    // Fired by the transit scripts when a metro or JR station is clicked.
+    map.on('stationclick', ({latlng, name}) => setCenter(latlng.lat, latlng.lng, `${name}駅 付近`));
     $('place-locate').addEventListener('click', locate);
     $('place-clear').addEventListener('click', clearAll);
     $('place-search').addEventListener('submit', search);

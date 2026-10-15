@@ -13,6 +13,7 @@ STATIC = Path(__file__).parent / "static"
 STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/places.js": ("places.js", "text/javascript; charset=utf-8"),
+    "/journey.js": ("journey.js", "text/javascript; charset=utf-8"),
     "/places.css": ("places.css", "text/css; charset=utf-8"),
 }
 
