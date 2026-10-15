@@ -16,6 +16,7 @@ import math
 from urllib.request import urlopen
 
 from transit_experiment.odpt import TRAIN_INFORMATION_URL
+from transit_experiment.timetable import seconds
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).parent / "static"
@@ -183,10 +184,50 @@ class StatusCache:
             }
 
 
-def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None, estimates=None, extras=None):
+def parse_journey(query):
+    """Validate /api/journey/longest parameters. Raises ValueError with a message for the user."""
+    def value(name):
+        values = query.get(name)
+        return values[0] if values and values[0] else None
+
+    points = []
+    for prefix in ("from", "to"):
+        try:
+            lat, lon = float(value(f"{prefix}_lat")), float(value(f"{prefix}_lon"))
+        except (TypeError, ValueError):
+            raise ValueError(f"{prefix}_lat・{prefix}_lonには数値を指定してください。") from None
+        if not (math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError(f"{prefix}_lat・{prefix}_lonの範囲が不正です。")
+        points.append((lat, lon))
+    times = []
+    for name in ("depart", "arrive"):
+        text = value(name)
+        if text is None:
+            if name == "arrive":
+                raise ValueError("到着希望時刻（arrive）を HH:MM で指定してください。")
+            times.append(None)
+            continue
+        hour, _, minute = text.partition(":")
+        if not (hour.isdigit() and minute.isdigit() and len(minute) == 2 and int(hour) < 24 and int(minute) < 60):
+            raise ValueError(f"{name}は HH:MM の形式で指定してください。")
+        times.append(seconds(text))
+    return points[0], points[1], times[0], times[1]
+
+
+def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None, estimates=None, extras=None, journeys=None):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
+            if path == "/api/journey/longest" and journeys is not None:
+                try:
+                    result = journeys.plan(*parse_journey(parse_qs(urlsplit(self.path).query)))
+                    status = 200 if result["journey"] else 404
+                    if not result["journey"]:
+                        result["error"] = "到着希望時刻までに着ける経路が見つかりませんでした。時刻を遅くするか、出発地・目的地を駅の近くにしてください。"
+                except ValueError as error:
+                    status, result = 400, {"error": str(error)}
+                self.respond(status, json.dumps(result, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+                return
             if path in ("/api/extra-network", "/api/extra-positions") and extras is not None:
                 query = parse_qs(urlsplit(self.path).query)
                 mode = query.get("mode", [""])[0]
@@ -277,7 +318,9 @@ def build_handler():
         return StatusCache(processed / "realtime" / f"gtfs-refresh-{mode}.json", token, ttl=86400, fetch=fetch)
 
     extras = ExtraService(ROOT, extra_cache)
-    return make_handler(cache, processed, trains, stations, estimates, extras), (estimates, extras)
+    from transit_experiment.journey import JourneyPlanner
+    journeys = JourneyPlanner(estimates, extras)
+    return make_handler(cache, processed, trains, stations, estimates, extras, journeys), (estimates, extras)
 
 
 def serve(host="127.0.0.1", port=8000):

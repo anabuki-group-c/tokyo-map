@@ -1,7 +1,7 @@
 'use strict';
 let transportMode = 'metro';
 const extraNetworks = new Map();
-let extraLayers = null, extraPins = null, extraRenderer = null, ExtraArrow = null;
+let extraLayers = null, extraPins = null, ExtraArrow = null;
 let extraBounds = null, extraSelection = '', extraRequest = 0, extraController = null, extraTimer = null;
 let extraNetwork = null, extraStations = null;
 function drawExtraStations() {
@@ -16,6 +16,7 @@ function drawExtraStations() {
     const popup = document.createElement('div');
     popup.textContent = `${station.name}駅 / ${station.routes.join('・')} — 駅の位置です。列車の現在位置ではありません。`;
     marker.bindTooltip(label).bindPopup(popup).addTo(extraStations);
+    marker.on('click', () => map.fire('stationclick', {latlng: marker.getLatLng(), name: station.name}));
   }
 }
 const modeNames = {metro: '東京メトロ', jr: 'JR東日本', bus: '都営バス', all: 'すべて（メトロ・JR・都営バス）'};
@@ -50,7 +51,7 @@ function drawExtraNetwork(network) {
       layer.bindTooltip(label);
       layer.on('click', () => { extraSelection = feature.properties.route; select.value = extraSelection; styleExtraRoutes(); requestExtra(); });
     },
-  }).addTo(map);
+  }).addTo(map).bringToBack();  // Same Canvas as stations and arrows; keep the lines under them.
   extraBounds = extraLayers.getBounds();
   document.getElementById('extra-source').textContent = network.source || '';
   styleExtraRoutes();
@@ -115,7 +116,7 @@ async function requestExtra() {
       const modelBased = pin.basis === 'headway_model' || result.basis === 'headway_model';
       const assumptions = pin.assumptions || result.assumptions;
       const route = lookup.get(pin.route);
-      const marker = new ExtraArrow([pin.lat, pin.lon], {renderer: extraRenderer, radius: 11, weight: 1.5,
+      const marker = new ExtraArrow([pin.lat, pin.lon], {radius: 11, weight: 1.5,
         heading: pin.heading, color: '#c2cbd0', fillColor: safeExtraColor(route?.color), fillOpacity: 0.95});
       const text = document.createElement('div'); text.style.whiteSpace = 'pre-line';
       text.textContent = `${route?.name || pin.route} / ${pin.headsign || ''}\n` +
@@ -151,8 +152,6 @@ function fitTransport() {
   if (bounds?.isValid()) map.fitBounds(bounds, {padding: [40, 40]});
 }
 function initExtraModes() {
-  map.createPane('extra-pins'); map.getPane('extra-pins').style.zIndex = 450;
-  extraRenderer = L.canvas({pane: 'extra-pins', padding: 0.1});
   ExtraArrow = L.CircleMarker.extend({_updatePath: drawTrainArrow});
   extraPins = L.layerGroup().addTo(map);
   extraStations = L.layerGroup().addTo(map);

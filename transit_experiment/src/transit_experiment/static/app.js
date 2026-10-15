@@ -101,12 +101,14 @@ async function initMap() {
     if (!window.L) throw new Error('地図ライブラリを読み込めません。ネットワーク接続を確認してください。');
     map = L.map('map', {zoomControl: false, preferCanvas: true, zoomAnimation: false, fadeAnimation: false}).setView([35.68, 139.76], 12);
     L.control.zoom({position: 'bottomright'}).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+    // Routes, stations and arrows all use the map's one default Canvas: a Canvas in a higher pane takes every
+    // click, so giving a layer its own pane would make the layers below it unclickable.
+    // A page that hosts these layers on its own basemap marks #map with data-basemap.
+    if (!map.getContainer().dataset.basemap) L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 19, updateWhenIdle: true, keepBuffer: 1,
     }).addTo(map);
     const [railroads, stations] = await Promise.all([getJSON('/data/railroads'), getJSON('/data/stations')]);
     map.createPane('flows'); map.getPane('flows').style.zIndex = 410; map.getPane('flows').style.pointerEvents = 'none';
-    map.createPane('stations'); map.getPane('stations').style.zIndex = 420;
     // One multipart geometry per route instead of hundreds of separate layers.
     const grouped = {type: 'FeatureCollection', features: routes.map(route => ({
       type: 'Feature', properties: {N02_003: route.name},
@@ -133,9 +135,10 @@ async function initMap() {
       const center = [(start[1] + end[1]) / 2, (start[0] + end[0]) / 2];
       const stationName = feature.properties.N02_005 || '駅';
       const key = `${route.id}:${stationName}`; if (seen.has(key)) continue; seen.add(key);
-      const marker = L.circleMarker(center, {pane: 'stations', radius: 3.5, color: route.color, weight: 1.5, fillColor: '#101b21', fillOpacity: 1}).addTo(map);
+      const marker = L.circleMarker(center, {radius: 3.5, color: route.color, weight: 1.5, fillColor: '#101b21', fillOpacity: 1}).addTo(map);
       const label = document.createElement('span'); label.textContent = `${stationName} / ${route.name}`;
       marker.bindTooltip(label); layers.push({layer: marker, route, kind: 'station'});
+      marker.on('click', () => map.fire('stationclick', {latlng: marker.getLatLng(), name: stationName}));
     }
     initExtraModes();
     renderTrainPins();

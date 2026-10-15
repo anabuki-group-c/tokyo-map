@@ -1,5 +1,5 @@
 'use strict';
-let trainData = null, trainGroup = null, trainRenderer = null, TrainArrow = null;
+let trainData = null, trainGroup = null, TrainArrow = null;
 function drawTrainArrow() {
   // Leaflet 1.9.4 Canvas path hook: no DOM/SVG node per train.
   const renderer = this._renderer;
@@ -24,8 +24,6 @@ function renderTrainPins() {
   if (!['metro', 'all'].includes(transportMode)) { trainGroup?.clearLayers(); return; }
   if (!map || !trainData) return;
   if (!trainGroup) {
-    map.createPane('trains'); map.getPane('trains').style.zIndex = 450;
-    trainRenderer = L.canvas({pane: 'trains', padding: 0.1});
     TrainArrow = L.CircleMarker.extend({_updatePath: drawTrainArrow});
     trainGroup = L.layerGroup().addTo(map);
   }
@@ -39,7 +37,7 @@ function renderTrainPins() {
     const route = routes.find(r => r.id === id || (r.id === 'Marunouchi' && id === 'MarunouchiBranch'));
     if (selected && route?.id !== selected) continue;
     const marker = new TrainArrow([pin.lat, pin.lon], {
-      renderer: trainRenderer, radius: 11, weight: 1.5, heading: pin.heading,
+      radius: 11, weight: 1.5, heading: pin.heading,
       color: pin.alert ? '#ff5c63' : pin.status_known ? '#ffffff' : '#9aa9b3',
       fillColor: pin.alert ? '#ff5c63' : route?.color || '#81e5c3', fillOpacity: 0.9,
     });
