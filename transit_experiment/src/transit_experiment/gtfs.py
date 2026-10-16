@@ -202,6 +202,12 @@ class Feed:
         a, b = points[i], points[i + 1]
         return [a[0] + (b[0] - a[0]) * fraction, a[1] + (b[1] - a[1]) * fraction], heading(a, b)
 
+    def between(self, shape, start, end):
+        """Shape points from offset start to offset end, ends included."""
+        cumulative, points = self.cumulative[shape], self.shapes[shape]
+        inside = points[bisect.bisect_right(cumulative, start):bisect.bisect_left(cumulative, end)]
+        return [self.point_on_shape(shape, start)[0], *inside, self.point_on_shape(shape, end)[0]]
+
     def network(self):
         features = []
         for route, ids in self.route_shapes.items():

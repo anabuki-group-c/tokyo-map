@@ -96,6 +96,10 @@ class JRModel:
         if path[2] > max(direct * 3, direct + .02):
             self.geometry.paths[key] = [a, b], [direct], direct, True
 
+    def path(self, route, a, b):
+        self.prepare_path(route, a, b)
+        return self.geometry.paths[(route, a, b)][0]
+
     def network(self):
         return {"routes": self.routes, "stations": list(self.stations.values()),
                 "geojson": {"type": "FeatureCollection", "features": self.features},

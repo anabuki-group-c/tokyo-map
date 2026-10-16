@@ -15,6 +15,7 @@ import math
 import time
 from collections import namedtuple
 from datetime import datetime
+from functools import partial
 
 from transit_experiment.timetable import JST, ROUTES, display_time, service_calendar, timetable_stops
 
@@ -47,9 +48,12 @@ def walk_seconds(distance_m):
 class Network:
     def __init__(self):
         self.stops, self.connections = {}, []
+        self.paths = {}  # trip -> path(stops) giving [(lat, lon)] along the track or road, or None.
 
-    def add_trip(self, trip, line, mode, rows):
+    def add_trip(self, trip, line, mode, rows, path=None):
         """rows: [(Stop, arrival, departure)] in travel order. Hops with impossible times are dropped."""
+        if path:
+            self.paths[trip] = path
         for stop, _, _ in rows:
             self.stops.setdefault(stop.id, stop)
         for (a, _, dep), (b, arr, _) in zip(rows, rows[1:]):
@@ -59,6 +63,7 @@ class Network:
     def extend(self, other):
         self.stops.update(other.stops)
         self.connections.extend(other.connections)
+        self.paths.update(other.paths)
         return self
 
     def near(self, point, radius):
@@ -68,7 +73,22 @@ class Network:
                 if (d := metres(point, (stop.lat, stop.lon))) <= radius]
 
 
-def metro_network(tables, station_records, calendar):
+def along(stops, track):
+    """[(lat, lon)] through the stops, following track(a, b) -> [(lon, lat)] between each pair."""
+    return [(lat, lon) for a, b in zip(stops, stops[1:]) for lon, lat in track((a.lon, a.lat), (b.lon, b.lat))]
+
+
+def shape_path(feed, shape, trip_stops, stops):
+    """[(lat, lon)] along the trip's GTFS shape from stops[0] to stops[-1]; None when the shape does not fit."""
+    want = [stop.id for stop in stops]
+    first = next((i for i in range(len(trip_stops)) if [row[5] for row in trip_stops[i:i + len(want)]] == want), None)
+    offsets = feed.match(shape, trip_stops) if shape in feed.shapes and first is not None else None
+    if not offsets:
+        return None
+    return [(lat, lon) for lon, lat in feed.between(shape, offsets[first], offsets[first + len(want) - 1])]
+
+
+def metro_network(tables, station_records, calendar, geometry=None):
     coords = {s.get("owl:sameAs"): s for s in station_records}
     network, seen = Network(), set()
     for table in tables:
@@ -81,6 +101,7 @@ def metro_network(tables, station_records, calendar):
         except (ValueError, TypeError):
             continue
         rows, piece = [], 0
+        path = geometry and partial(along, track=partial(geometry.path, railway.split(".")[-1]))
         # Through trains continue onto other companies' stations with no coordinates here; split there, and give
         # each piece its own trip id so a ride never jumps the gap.
         for station, arrival, departure in stops + [(None, None, None)]:
@@ -89,7 +110,7 @@ def metro_network(tables, station_records, calendar):
                 stop = Stop(station, record["dc:title"], float(record["geo:lat"]), float(record["geo:long"]))
             except (TypeError, KeyError, ValueError):
                 if len(rows) > 1:
-                    network.add_trip(f"metro:{railway}:{number}:{piece}", ROUTES.get(railway.split(".")[-1], railway), "metro", rows)
+                    network.add_trip(f"metro:{railway}:{number}:{piece}", ROUTES.get(railway.split(".")[-1], railway), "metro", rows, path)
                     piece += 1
                 rows = []
                 continue
@@ -111,7 +132,8 @@ def jr_model_network(model):
                     for origin, _, a, _, offset, _ in legs]
             _, target, _, b, _, _ = legs[-1]
             rows.append((Stop("jr:" + target, target, b[1], b[0]), t0 + duration, t0 + duration))
-            network.add_trip(f"jr-model:{route}:{direction}:{k}", names[route] + "（簡易推定）", "jr", rows)
+            network.add_trip(f"jr-model:{route}:{direction}:{k}", names[route] + "（簡易推定）", "jr", rows,
+                             partial(along, track=partial(model.path, route)))
     return network
 
 
@@ -125,16 +147,24 @@ def gtfs_network(feed, day, start, end):
         services = active_services(db, day)
         if not services:
             return network
-        sql = ("SELECT t.id, r.name, s.id, s.name, s.lat, s.lon, tm.arrival, tm.departure FROM trips t "
+        sql = ("SELECT t.id, r.name, t.shape, s.id, s.name, s.lat, s.lon, tm.arrival, tm.departure FROM trips t "
                "JOIN routes r ON r.id=t.route JOIN times tm ON tm.trip=t.id JOIN stops s ON s.id=tm.stop "
                "WHERE t.service IN (" + ",".join("?" * len(services)) + ") AND t.start<=? AND t.end>=? ORDER BY t.id, tm.seq")
-        trip, line, rows = None, None, []
-        for trip_id, route, stop_id, name, lat, lon, arrival, departure in db.execute(sql, (*services, end, start)):
+        trip, line, shape, rows = None, None, None, []
+
+        def add():
+            if not rows:
+                return
+            # Feed.match reads stops as (_, _, name, lon, lat, id) rows.
+            trip_stops = [(None, None, stop.name, stop.lon, stop.lat, stop.id) for stop, _, _ in rows]
+            network.add_trip(f"{feed.mode}:{trip}", line, feed.mode, rows, partial(shape_path, feed, shape, trip_stops))
+
+        for trip_id, route, shape_id, stop_id, name, lat, lon, arrival, departure in db.execute(sql, (*services, end, start)):
             if trip_id != trip:
-                network.add_trip(f"{feed.mode}:{trip}", line, feed.mode, rows)
-                trip, line, rows = trip_id, route, []
+                add()
+                trip, line, shape, rows = trip_id, route, shape_id, []
             rows.append((Stop(f"{feed.mode}:{stop_id}", name, lat, lon), arrival, departure))
-        network.add_trip(f"{feed.mode}:{trip}", line, feed.mode, rows)
+        add()
     return network
 
 
@@ -326,9 +356,14 @@ def describe(legs, network, by_trip, origin, destination, start):
             _, frm, to, dep, arr, trip, first, last, ridden = leg
             hops = by_trip[trip][first:last]
             path = [place(hops[0].frm, None)] + [place(h.to, None) for h in hops]
+            shape = network.paths.get(trip)
+            # The track or road between the stops; without one the map joins the stops with straight lines.
+            line = shape and shape([stops[hops[0].frm]] + [stops[h.to] for h in hops])
+            if line:
+                ridden = sum(metres(a, b) for a, b in zip(line, line[1:]))
             ride_s, ride_m = ride_s + arr - dep, ride_m + ridden
             out.append({"mode": hops[0].mode, "line": hops[0].line, "from": path[0], "to": path[-1], "stops": path,
-                        "depart": display_time(dep), "arrive": display_time(arr), "distance_m": round(ridden)})
+                        "path": line or None, "depart": display_time(dep), "arrive": display_time(arr), "distance_m": round(ridden)})
         else:
             kind, frm, to, dep, arr = leg
             a, b = place(frm, origin), place(to, destination)
@@ -364,7 +399,7 @@ class JourneyPlanner:
                       if cal == calendar and snap and snap.get("updated_at") for t in snap["notices"]]
         if tables:
             # ponytail: rebuilt per request (~0.5 s); cache by (day, timetable dates) if it becomes slow.
-            network.extend(metro_network(tables, self.timetables.stations.get()["notices"], calendar))
+            network.extend(metro_network(tables, self.timetables.stations.get()["notices"], calendar, self.timetables.geometry))
             sources.append("東京メトロ（ODPT 実時刻表）")
         for mode in ("jr", "bus"):
             feed = self.extras.feeds.get(mode)
@@ -379,6 +414,6 @@ class JourneyPlanner:
         result, complete = longest_journey(network, origin, destination, start, arrive, radius)
         return {"journey": result, "complete": complete, "radius_m": radius, "service_date": day.isoformat(), "calendar": calendar,
                 "window": {"depart": display_time(start), "arrive": display_time(arrive)}, "sources": sources,
-                "notes": ["移動距離と再訪判定は駅間・徒歩区間を直線で近似しています（線路・道路の形状は未使用）。",
+                "notes": ["乗車区間の表示と距離は線路・バスの運行経路に沿っています（形状データがない区間は直線）。再訪判定は駅間を直線で近似しています。",
                           "徒歩は直線距離×1.3、分速80mで見積もっています。",
                           "到着はデータ上の判定です。遅延・運休は反映していません。"]}

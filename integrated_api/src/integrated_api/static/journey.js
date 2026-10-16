@@ -94,7 +94,8 @@
     layer.clearLayers();
     const bounds = L.latLngBounds([]);
     for (const leg of journey.legs) {
-      const points = (leg.stops ?? [leg.from, leg.to]).map((p) => [p.lat, p.lon]);
+      // path follows the track or road; without it, join the stops with straight lines.
+      const points = leg.path ?? (leg.stops ?? [leg.from, leg.to]).map((p) => [p.lat, p.lon]);
       points.forEach((p) => bounds.extend(p));
       L.polyline(points, {
         renderer, weight: leg.mode === 'walk' ? 3 : 5, color: MODE_COLORS[leg.mode] ?? '#1d2a30', opacity: 0.95,

@@ -1,6 +1,6 @@
 import unittest
 
-from transit_experiment.journey import Areas, Network, Stop, longest_journey, metro_network
+from transit_experiment.journey import Areas, Network, Stop, along, longest_journey, metro_network
 
 # Origin is next to A and the destination next to D (about 1.8 km apart, beyond walking range of each other).
 A, D = Stop("A", "A駅", 35.0, 139.0), Stop("D", "D駅", 35.0, 139.02)
@@ -53,6 +53,15 @@ class LongestJourneyTests(unittest.TestCase):
     def test_loop_arrives_later_than_the_direct_train(self):
         journey, _ = self.plan("10:32")
         self.assertEqual(self.lines(journey), ["環状線"])
+
+    def test_ride_is_drawn_along_the_track(self):
+        net = network()
+        # A bent track: A -> bend -> D, about twice the straight distance.
+        net.paths["late"] = lambda stops: along(stops, lambda a, b: [a, (139.01, 35.01), b])
+        journey, _ = longest_journey(net, self.origin, self.destination, at("09:58"), at("10:40"))
+        ride = journey["legs"][1]
+        self.assertEqual(ride["path"], [(35.0, 139.0), (35.01, 139.01), (35.0, 139.02)])
+        self.assertGreater(ride["distance_m"], 2500)  # Straight A -> D is about 1.8 km.
 
     def test_nothing_arrives_in_time(self):
         self.assertEqual(self.plan("10:03"), (None, True))
