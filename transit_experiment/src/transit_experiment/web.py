@@ -211,7 +211,14 @@ def parse_journey(query):
         if not (hour.isdigit() and minute.isdigit() and len(minute) == 2 and int(hour) < 24 and int(minute) < 60):
             raise ValueError(f"{name}は HH:MM の形式で指定してください。")
         times.append(seconds(text))
-    return points[0], points[1], times[0], times[1]
+    radius = value("radius_m")
+    try:
+        radius = 300.0 if radius is None else float(radius)
+    except ValueError:
+        raise ValueError("radius_m（訪問エリアの半径）には数値を指定してください。") from None
+    if not 50 <= radius <= 2000:
+        raise ValueError("radius_m（訪問エリアの半径）は50〜2000メートルで指定してください。")
+    return points[0], points[1], times[0], times[1], radius
 
 
 def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None, estimates=None, extras=None, journeys=None):
@@ -222,8 +229,10 @@ def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None
                 try:
                     result = journeys.plan(*parse_journey(parse_qs(urlsplit(self.path).query)))
                     status = 200 if result["journey"] else 404
-                    if not result["journey"]:
-                        result["error"] = "到着希望時刻までに着ける経路が見つかりませんでした。時刻を遅くするか、出発地・目的地を駅の近くにしてください。"
+                    if not result["journey"] and result["complete"]:
+                        result["error"] = "条件を満たす経路はありません。到着希望時刻を遅くするか、訪問エリアの半径を小さくしてください。"
+                    elif not result["journey"]:
+                        result["error"] = "計算時間内に経路を見つけられませんでした（経路がないとは限りません）。"
                 except ValueError as error:
                     status, result = 400, {"error": str(error)}
                 self.respond(status, json.dumps(result, ensure_ascii=False).encode(), "application/json; charset=utf-8")

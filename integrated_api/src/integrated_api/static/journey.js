@@ -107,13 +107,22 @@
     if (bounds.isValid()) map.fitBounds(bounds, {padding: [32, 32]});
   }
 
+  function duration(seconds) {
+    const minutes = Math.round(seconds / 60);
+    return minutes >= 60 ? `${Math.floor(minutes / 60)}時間${minutes % 60}分` : `${minutes}分`;
+  }
+
   function renderJourney(body) {
     const journey = body.journey;
     const box = $('journey-result');
     box.replaceChildren();
     const summary = document.createElement('p');
     summary.className = 'journey-summary';
-    summary.textContent = `乗車距離 ${(journey.ride_distance_m / 1000).toFixed(1)} km ・ ${journey.depart} 発 → ${journey.arrive} 着`;
+    summary.textContent = `総所要時間 ${duration(journey.total_seconds)} ・ ${journey.depart} 発 → ${journey.arrive} 着`;
+    const breakdown = document.createElement('p');
+    breakdown.className = 'muted';
+    breakdown.textContent = `内訳：乗車 ${duration(journey.ride_seconds)} ・ 待ち ${duration(journey.wait_seconds)} ・ 徒歩 ${duration(journey.walk_seconds)}`
+      + ` ／ 推定移動距離 ${(journey.distance_m / 1000).toFixed(1)} km`;
     const legs = document.createElement('ol');
     legs.className = 'journey-legs';
     for (const leg of journey.legs) {
@@ -133,7 +142,7 @@
     const notes = document.createElement('p');
     notes.className = 'muted';
     notes.textContent = [...body.notes, `使用データ：${body.sources.join('、')}`].join(' ');
-    box.append(summary, legs, notes);
+    box.append(summary, breakdown, legs, notes);
     drawJourney(journey);
   }
 
@@ -151,9 +160,10 @@
     if (!$('journey-search').reportValidity()) return;
     const params = new URLSearchParams({
       from_lat: origin.lat, from_lon: origin.lon, to_lat: destination.lat, to_lon: destination.lon, arrive: $('journey-arrive').value,
+      radius_m: $('journey-radius').value,
     });
     if ($('journey-depart').value) params.set('depart', $('journey-depart').value);
-    showMessage('遠回り経路を探索中…（数秒かかります）');
+    showMessage('遠回り経路を探索中…（最大10秒ほどかかります）');
     let response, body;
     try {
       response = await fetch(`/api/journey/longest?${params}`);
@@ -169,7 +179,9 @@
       showMessage(body.error ?? `エラーが発生しました（HTTP ${response.status}）。`, 'error');
       return;
     }
-    showMessage('');
+    // 探索完了なら条件内で最長と確認済み。時間上限なら、探した範囲での最長。
+    showMessage(body.complete ? '探索完了：この条件で最も時間のかかる経路です。' : '計算時間の上限に達しました。探索した範囲で最長の経路です（最長とは限りません）。',
+      body.complete ? '' : 'warning');
     renderJourney(body);
   }
 

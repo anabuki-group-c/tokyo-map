@@ -16,7 +16,7 @@
   <script defer src="/app.js?v=15"></script>
   <!-- After app.js: uses the map it creates. -->
   <script defer src="/places.js?v=7"></script>
-  <script defer src="/journey.js?v=2"></script>
+  <script defer src="/journey.js?v=3"></script>
 </head>
 <body>
   <main>
@@ -47,7 +47,7 @@
       </section>
       <section id="journey-panel" aria-labelledby="journey-heading">
         <h2 id="journey-heading">遠回り経路</h2>
-        <p class="muted">到着希望時刻までに着く経路の中から、電車・バスに乗る距離が最も長いものを探します。同じ駅は二度通りません。</p>
+        <p class="muted">到着希望時刻までに着く経路の中から、総所要時間（乗車・待ち・徒歩の合計）が最も長いものを探します。一度離れた駅の周り（半径X）には戻りません。乗車中に通り過ぎた駅も含みます。</p>
         <form id="journey-search">
           <p class="journey-point">出発地：<span id="journey-origin">未選択</span></p>
           <button type="button" id="journey-locate">現在地を出発地にする</button>
@@ -60,6 +60,8 @@
           <input id="journey-depart" type="time">
           <label for="journey-arrive">到着希望時刻</label>
           <input id="journey-arrive" type="time" required>
+          <label for="journey-radius">訪問エリアの半径X（メートル）</label>
+          <input id="journey-radius" type="number" min="50" max="2000" step="10" value="300" required>
           <div class="place-actions"><button type="submit" id="journey-submit">遠回り経路を探す</button><button type="button" id="journey-clear">経路を消す</button></div>
         </form>
         <p id="journey-message" role="status" aria-live="polite"></p>

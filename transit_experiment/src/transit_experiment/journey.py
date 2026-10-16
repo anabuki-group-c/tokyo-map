@@ -1,4 +1,8 @@
-"""Longest-ride journeys ("Long Route Times"): ride as far as possible and still arrive by a deadline.
+"""Longest journeys ("Long Route Times"): take as long as possible and still arrive by a deadline.
+
+Follows 最長ルート検索_アルゴリズム設計書 v1.0: maximise the total time T = arrival - departure time (rides,
+waits and walks), arrive by the deadline D, never re-enter an area already left, and alight only to change
+or to finish. An area is a circle of radius X around a station; the whole path (rides included) is checked.
 
 All modes become one list of timetable hops ("connections"): metro from the ODPT timetables, JR from the
 real GTFS or the headway model, Toei bus from its GTFS. Times are service-day seconds (03:00 boundary,
@@ -8,6 +12,7 @@ from __future__ import annotations
 
 import bisect
 import math
+import time
 from collections import namedtuple
 from datetime import datetime
 
@@ -20,6 +25,9 @@ TRANSFER_S = 60
 ACCESS_M = 1000      # Furthest walk from the origin to a first stop, and from a last stop to the destination.
 FOOTPATH_M = 400     # Furthest walk between two stops when changing.
 MAX_WINDOW_S = 6 * 3600
+AREA_RADIUS_M = 300  # X: default radius of the area around each station.
+MERGE_M = 1000       # Same-named stops closer than this are one station (JR and metro 新宿).
+TIME_LIMIT_S = 10    # Search budget per request; the best journey so far is returned when it runs out.
 
 Connection = namedtuple("Connection", "dep arr frm to trip line mode metres")
 Stop = namedtuple("Stop", "id name lat lon")
@@ -130,10 +138,67 @@ def gtfs_network(feed, day, start, end):
     return network
 
 
-def longest_journey(network, origin, destination, start, deadline, beam=200, max_rides=8):
-    """Approximate the journey that rides the most metres, arrives by `deadline`, and passes no station twice.
+class Areas:
+    """Areas of radius X around stations, as bits of an int: `inside` and `exited` sets are int masks."""
+    def __init__(self, stops, radius):
+        self.radius, self.cell = radius, max(radius, 500) / 111_195
+        seeds, members = {}, []  # seeds: name -> [(first stop's point, group index)]
+        for stop in stops.values():
+            here = seeds.setdefault(stop.name, [])
+            index = next((i for point, i in here if metres(point, (stop.lat, stop.lon)) <= MERGE_M), None)
+            if index is None:
+                here.append(((stop.lat, stop.lon), len(members)))
+                members.append([])
+                index = len(members) - 1
+            members[index].append(stop)
+        self.centres = [(sum(m.lat for m in group) / len(group), sum(m.lon for m in group) / len(group)) for group in members]
+        self.grid = {}
+        for bit, (lat, lon) in enumerate(self.centres):
+            self.grid.setdefault((int(lat // self.cell), int(lon // self.cell)), []).append(bit)
+        self.cache = {}
 
-    A station is its name, so JR and metro 新宿 count as one station. Returns None if nothing arrives in time.
+    def _near(self, a, b):
+        """Area bits whose centres lie in grid cells around the box spanned by points a and b."""
+        pad = self.radius / 111_195 / 0.8
+        y0, y1 = int((min(a[0], b[0]) - pad) // self.cell), int((max(a[0], b[0]) + pad) // self.cell)
+        x0, x1 = int((min(a[1], b[1]) - pad) // self.cell), int((max(a[1], b[1]) + pad) // self.cell)
+        return [bit for y in range(y0, y1 + 1) for x in range(x0, x1 + 1) for bit in self.grid.get((y, x), ())]
+
+    def touched(self, a, b):
+        """Mask of areas the straight segment a -> b passes through (both ends included)."""
+        key = (a, b)
+        if key not in self.cache:
+            # Flat-earth metres around a; fine for the few kilometres between two stops.
+            k = 111_195 * math.cos(math.radians(a[0]))
+            bx, by = (b[1] - a[1]) * k, (b[0] - a[0]) * 111_195
+            length2 = bx * bx + by * by
+            mask = 0
+            for bit in self._near(a, b):
+                cx, cy = (self.centres[bit][1] - a[1]) * k, (self.centres[bit][0] - a[0]) * 111_195
+                t = min(1.0, max(0.0, (cx * bx + cy * by) / length2)) if length2 else 0.0
+                if math.hypot(cx - t * bx, cy - t * by) < self.radius:
+                    mask |= 1 << bit
+            self.cache[key] = mask
+        return self.cache[key]
+
+    def at(self, point):
+        return self.touched(point, point)
+
+    def move(self, inside, exited, a, b):
+        """(inside, exited) after moving a -> b, or None if the move re-enters an area already left."""
+        crossed = self.touched(a, b)
+        if crossed & exited:
+            return None
+        now = self.at(b)
+        return now, exited | ((inside | crossed) & ~now)
+
+
+def longest_journey(network, origin, destination, start, deadline, radius=AREA_RADIUS_M,
+                    time_limit=TIME_LIMIT_S, clock=time.monotonic):
+    """The journey that arrives as late as possible by `deadline`, never re-entering an area it has left.
+
+    Returns (journey or None, complete). complete=False means the time limit cut the search short: the
+    journey is the best found so far, and None does not prove that no journey exists.
     """
     conns = sorted((c for c in network.connections if start <= c.dep and c.arr <= deadline), key=lambda c: c.dep)
     stops = network.stops
@@ -154,7 +219,8 @@ def longest_journey(network, origin, destination, start, deadline, beam=200, max
                         if b.id != a.id and (d := metres((a.lat, a.lon), (b.lat, b.lon))) <= FOOTPATH_M:
                             footpaths.setdefault(a.id, []).append((b.id, walk_seconds(d)))
 
-    # Backward pass: latest[s] is the latest time one can stand at s and still arrive by the deadline.
+    # Earliest-arrival check with the revisit rule relaxed, run backwards: latest[s] is the latest time one can
+    # stand at s, ready to change, and still arrive by the deadline. Past it, no journey from s can make it.
     latest = {s: deadline - w for s, w in egress.items()}
     on_useful_trip = set()
     for c in reversed(conns):
@@ -176,68 +242,76 @@ def longest_journey(network, origin, destination, start, deadline, beam=200, max
     for items in departures.values():
         items.sort()
 
-    def finished(state):
-        distance, time, stop, _, legs = state
-        walk = egress[stop]
-        return distance, legs + (("walk", stop, None, time, time + walk),)
+    # Earliest arrival from the origin with the revisit rule relaxed, run forwards: only hops one can actually
+    # catch count. No journey arrives later than the last such hop into a stop near the destination (plus the
+    # walk), so reaching that ceiling proves the journey is the longest.
+    earliest = {s: start + w for s, w in access}
+    boarded, ceiling = set(), None
+    for c in conns:
+        if c.trip in boarded or earliest.get(c.frm, math.inf) <= c.dep:
+            boarded.add(c.trip)
+            if c.arr < earliest.get(c.to, math.inf):
+                earliest[c.to] = c.arr
+                for other, walk in footpaths.get(c.to, ()):
+                    earliest[other] = min(earliest.get(other, math.inf), c.arr + walk)
+            if c.to in egress and (arrival := c.arr + egress[c.to]) <= deadline:
+                ceiling = arrival if ceiling is None else max(ceiling, arrival)
+    if ceiling is None:
+        return None, True
 
-    # ponytail: beam search keeps the `beam` farthest-riding partial journeys per round, so it can miss the true
-    # optimum (longest simple path is NP-hard); widen `beam` or add branch-and-bound if results look short.
-    states = [(0.0, start + walk, stop, frozenset({stops[stop].name}), (("walk", None, stop, start, start + walk),))
-              for stop, walk in access if start + walk <= latest.get(stop, -math.inf)]
-    best = None
-    for _ in range(max_rides + 1):
-        grown = {}
-        for state in states:
-            distance, time, stop, visited, legs = state
-            if stop in egress and time + egress[stop] <= deadline and legs[-1][0] != "walk-change":
-                candidate = finished(state)
-                if best is None or candidate[0] > best[0]:
-                    best = candidate
-            ready = time + (TRANSFER_S if len(legs) > 1 else 0)
-            items = departures.get(stop, [])
-            directions = set()
-            for dep, trip, index in items[bisect.bisect_left(items, (ready,)):]:
-                if dep > latest.get(stop, -math.inf) + TRANSFER_S:
-                    break  # Nothing later from here can still make the deadline.
-                hops = by_trip[trip]
-                # The earliest train per line and direction rides the same stations with more time left.
-                direction = (hops[index].line, hops[index].to)
-                if direction in directions:
-                    continue
-                directions.add(direction)
-                ridden, seen = 0.0, set()
-                for position, hop in enumerate(hops[index:], index + 1):
-                    name = stops[hop.to].name
-                    if name in visited or name in seen:
-                        break
-                    ridden += hop.metres
-                    seen.add(name)
-                    if hop.arr <= latest.get(hop.to, -math.inf):
-                        leg = ("ride", stop, hop.to, dep, hop.arr, trip, index, position, ridden)
-                        grown_state = (distance + ridden, hop.arr, hop.to, visited | seen, legs + (leg,))
-                        key = (hop.to, hop.arr // 300)
-                        if key not in grown or grown[key][0] < grown_state[0]:
-                            grown[key] = grown_state
-            if legs[-1][0] == "ride":
-                for other, walk in footpaths.get(stop, ()):
-                    name = stops[other].name
-                    arrival = time + walk
-                    if (name not in visited or name == stops[stop].name) and arrival <= latest.get(other, -math.inf):
-                        grown_state = (distance, arrival, other, visited | {name}, legs + (("walk-change", stop, other, time, arrival),))
-                        key = (other, arrival // 300)
-                        if key not in grown or grown[key][0] < grown_state[0]:
-                            grown[key] = grown_state
-        states = sorted(grown.values(), key=lambda s: -s[0])[:beam]
-        if not states:
-            break
-    if best is None:
-        return None
-    return describe(best, network, by_trip, origin, destination)
+    areas = Areas(stops, radius)
+    point = lambda stop_id: (stops[stop_id].lat, stops[stop_id].lon)
+    # A free state stands at a stop: (time, stop, how it got there, inside, exited, legs). `came` is None after
+    # the walk from the origin, "walk" after a change on foot, or the trip just left.
+    stack = []
+    inside0 = areas.at(origin)
+    for stop, walk in access:
+        moved = areas.move(inside0, 0, origin, point(stop))
+        if moved and start + walk <= latest.get(stop, -math.inf) + TRANSFER_S:
+            stack.append((start + walk, stop, None, *moved, (("walk", None, stop, start, start + walk),)))
+
+    # ponytail: plain depth-first search over every candidate (the longest simple path is NP-hard), stopped by
+    # TIME_LIMIT_S; add per-state upper bounds or dominance rules if the limit is hit too often.
+    best, best_arrival, stop_at = None, -math.inf, clock() + time_limit
+    while stack:
+        if clock() > stop_at:
+            return describe_best(best, network, by_trip, origin, destination, start), False
+        now, stop, came, inside, exited, legs = stack.pop()
+        if came not in (None, "walk"):
+            # Just got off a trip: finish here, or change (on foot, or at this stop below).
+            if stop in egress and (arrival := now + egress[stop]) <= deadline and arrival > best_arrival:
+                if areas.move(inside, exited, point(stop), destination):
+                    best, best_arrival = legs + (("walk", stop, None, now, arrival),), arrival
+                    if best_arrival >= ceiling:
+                        return describe_best(best, network, by_trip, origin, destination, start), True
+            for other, walk in footpaths.get(stop, ()):
+                if now + walk <= latest.get(other, -math.inf) and (moved := areas.move(inside, exited, point(stop), point(other))):
+                    stack.append((now + walk, other, "walk", *moved, legs + (("walk-change", stop, other, now, now + walk),)))
+        # Board a later trip here. Waiting for a later one is allowed; the same trip is never re-boarded.
+        ready = now + (0 if came is None else TRANSFER_S)
+        items = departures.get(stop, [])
+        for dep, trip, index in items[bisect.bisect_left(items, (ready,)):]:
+            if dep > latest.get(stop, -math.inf) + TRANSFER_S:
+                break  # Nothing later from here can still make the deadline.
+            if trip == came:
+                continue
+            on, off, ridden = inside, exited, 0.0
+            for position, hop in enumerate(by_trip[trip][index:], index + 1):
+                moved = areas.move(on, off, point(hop.frm), point(hop.to))
+                if moved is None:
+                    break  # Staying on board would re-enter an area already left.
+                on, off = moved
+                ridden += hop.metres
+                if hop.arr <= latest.get(hop.to, -math.inf) or (hop.to in egress and hop.arr + egress[hop.to] <= deadline):
+                    stack.append((hop.arr, hop.to, trip, on, off, legs + (("ride", stop, hop.to, dep, hop.arr, trip, index, position, ridden),)))
+    return describe_best(best, network, by_trip, origin, destination, start), True
 
 
-def describe(best, network, by_trip, origin, destination):
-    distance, legs = best
+def describe_best(best, network, by_trip, origin, destination, start):
+    return None if best is None else describe(best, network, by_trip, origin, destination, start)
+
+
+def describe(legs, network, by_trip, origin, destination, start):
     stops = network.stops
 
     def place(stop_id, fallback):
@@ -246,23 +320,30 @@ def describe(best, network, by_trip, origin, destination):
         stop = stops[stop_id]
         return {"name": stop.name, "lat": stop.lat, "lon": stop.lon}
 
-    out = []
+    out, ride_s, walk_s, ride_m, walk_m = [], 0, 0, 0.0, 0.0
     for leg in legs:
         if leg[0] == "ride":
             _, frm, to, dep, arr, trip, first, last, ridden = leg
             hops = by_trip[trip][first:last]
             path = [place(hops[0].frm, None)] + [place(h.to, None) for h in hops]
+            ride_s, ride_m = ride_s + arr - dep, ride_m + ridden
             out.append({"mode": hops[0].mode, "line": hops[0].line, "from": path[0], "to": path[-1], "stops": path,
                         "depart": display_time(dep), "arrive": display_time(arr), "distance_m": round(ridden)})
         else:
             kind, frm, to, dep, arr = leg
             a, b = place(frm, origin), place(to, destination)
+            distance = metres((a["lat"], a["lon"]), (b["lat"], b["lon"]))
+            walk_s, walk_m = walk_s + arr - dep, walk_m + distance
             if arr - dep < 1:
                 continue
             out.append({"mode": "walk", "from": a, "to": b, "depart": display_time(dep), "arrive": display_time(arr),
-                        "distance_m": round(metres((a["lat"], a["lon"]), (b["lat"], b["lon"])))})
-    return {"ride_distance_m": round(distance), "depart": out[0]["depart"] if out else None,
-            "arrive": out[-1]["arrive"] if out else None, "legs": out}
+                        "distance_m": round(distance)})
+    total, ride_s, walk_s = round(legs[-1][4] - start), round(ride_s), round(walk_s)
+    # Wait = everything that is neither riding nor walking, including the first wait at the origin.
+    return {"total_seconds": total, "ride_seconds": ride_s, "walk_seconds": walk_s,
+            "wait_seconds": total - ride_s - walk_s, "ride_distance_m": round(ride_m),
+            "distance_m": round(ride_m + walk_m), "depart": display_time(start), "arrive": display_time(legs[-1][4]),
+            "legs": out}
 
 
 class JourneyPlanner:
@@ -271,7 +352,7 @@ class JourneyPlanner:
         self.timetables, self.extras = timetables, extras
         self.base_key, self.base = None, None
 
-    def plan(self, origin, destination, depart, arrive, now=None):
+    def plan(self, origin, destination, depart, arrive, radius=AREA_RADIUS_M, now=None):
         now = (now or datetime.now(JST)).astimezone(JST)
         day, calendar = service_calendar(now)
         start = depart if depart is not None else (now - datetime.combine(day, datetime.min.time(), JST)).total_seconds()
@@ -295,9 +376,9 @@ class JourneyPlanner:
             else:
                 network.extend(gtfs_network(feed, day, start, arrive))
                 sources.append("都営バス（GTFS 時刻表）" if mode == "bus" else "JR東日本（GTFS 時刻表）")
-        result = longest_journey(network, origin, destination, start, arrive)
-        return {"journey": result, "service_date": day.isoformat(), "calendar": calendar,
+        result, complete = longest_journey(network, origin, destination, start, arrive, radius)
+        return {"journey": result, "complete": complete, "radius_m": radius, "service_date": day.isoformat(), "calendar": calendar,
                 "window": {"depart": display_time(start), "arrive": display_time(arrive)}, "sources": sources,
-                "notes": ["乗車距離は駅間の直線距離の合計です。線路・道路に沿った距離ではありません。",
+                "notes": ["移動距離と再訪判定は駅間・徒歩区間を直線で近似しています（線路・道路の形状は未使用）。",
                           "徒歩は直線距離×1.3、分速80mで見積もっています。",
-                          "遅延・運休は反映していません。最長経路は近似探索で、真の最長とは限りません。"]}
+                          "到着はデータ上の判定です。遅延・運休は反映していません。"]}
