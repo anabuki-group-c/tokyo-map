@@ -16,7 +16,7 @@
   <script defer src="/app.js?v=15"></script>
   <!-- After app.js: uses the map it creates. -->
   <script defer src="/places.js?v=7"></script>
-  <script defer src="/journey.js?v=4"></script>
+  <script defer src="/journey.js?v=5"></script>
 </head>
 <body>
   <main>
@@ -51,9 +51,9 @@
         <form id="journey-search">
           <p class="journey-point">出発地：<span id="journey-origin">未選択</span></p>
           <button type="button" id="journey-locate">現在地を出発地にする</button>
-          <label for="journey-address">住所で出発地を探す（東京都内）</label>
-          <div class="journey-address"><input id="journey-address" type="search" placeholder="例：渋谷区神南1" autocomplete="street-address"><button type="button" id="journey-geocode">検索</button></div>
-          <ul id="journey-candidates" aria-label="住所の候補"></ul>
+          <label for="journey-address">地名・駅名・住所で出発地を探す（東京都内）</label>
+          <div class="journey-address"><input id="journey-address" type="search" placeholder="例：東京駅、東京タワー、渋谷区神南1" autocomplete="off"><button type="button" id="journey-geocode">検索</button></div>
+          <ul id="journey-candidates" aria-label="出発地の候補"></ul>
           <p class="journey-point">目的地：<span id="journey-destination">未選択</span></p>
           <p class="muted">検索結果のお店・観光地の詳細を開いて「ここへの遠回り経路」を押します。</p>
           <label for="journey-depart">出発時刻（空欄なら今）</label>

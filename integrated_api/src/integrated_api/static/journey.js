@@ -1,5 +1,5 @@
 'use strict';
-// Long-route search: from the current location or a searched Tokyo address to a place picked in places.js.
+// Long-route search: from the current location or a searched Tokyo name or address to a place picked in places.js.
 (() => {
   const MODE_LABELS = {walk: '徒歩', metro: 'メトロ', jr: 'JR', bus: '都営バス'};
   const MODE_COLORS = {walk: '#495057', metro: '#7048e8', jr: '#2b8a3e', bus: '#e67700'};
@@ -25,7 +25,7 @@
 
   function locate() {
     if (!navigator.geolocation) {
-      showMessage('このブラウザは位置情報の取得に対応していません。住所で出発地を探してください。', 'error');
+      showMessage('このブラウザは位置情報の取得に対応していません。地名や住所で出発地を探してください。', 'error');
       return;
     }
     showMessage('現在地を取得中…');
@@ -34,43 +34,55 @@
         setOrigin(position.coords.latitude, position.coords.longitude, '現在地');
         showMessage('');
       },
-      () => showMessage('現在地を取得できませんでした。位置情報の許可を確認するか、住所で出発地を探してください。', 'error'),
+      () => showMessage('現在地を取得できませんでした。位置情報の許可を確認するか、地名や住所で出発地を探してください。', 'error'),
       {enableHighAccuracy: true, timeout: 10000},
     );
+  }
+
+  async function fetchJson(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
   }
 
   async function geocode() {
     const query = $('journey-address').value.trim();
     if (!query) {
-      showMessage('住所を入力してください。', 'warning');
+      showMessage('地名・駅名・住所を入力してください。', 'warning');
       return;
     }
-    showMessage('住所を検索中…');
-    let results;
-    try {
-      const response = await fetch(GSI_SEARCH + encodeURIComponent(query));
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      results = await response.json();
-    } catch {
-      showMessage('住所検索（国土地理院）に接続できませんでした。', 'error');
+    showMessage('検索中…');
+    // Names (stations, bus stops, places) from this server and addresses from GSI; either may fail on its own.
+    const [named, addresses] = await Promise.allSettled([
+      fetchJson(`/api/search?q=${encodeURIComponent(query)}`),
+      fetchJson(GSI_SEARCH + encodeURIComponent(query)),
+    ]);
+    if (named.status === 'rejected' && addresses.status === 'rejected') {
+      showMessage('地名・住所の検索に接続できませんでした。', 'error');
       return;
     }
-    // Only Tokyo: the timetables cover Tokyo, and the GSI search also returns loose matches all over Japan.
-    const tokyo = results.filter((item) => item.properties?.title?.startsWith('東京都')).slice(0, 8);
+    const candidates = [
+      ...(named.value?.results ?? []).map((item) => ({
+        label: item.name, title: item.detail ? `${item.name}（${item.detail}）` : item.name, lat: item.lat, lon: item.lon,
+      })),
+      // Only Tokyo: the timetables cover Tokyo, and the GSI search also returns loose matches all over Japan.
+      ...(addresses.value ?? []).filter((item) => item.properties?.title?.startsWith('東京都')).slice(0, 8).map((item) => ({
+        label: item.properties.title, title: item.properties.title, lat: item.geometry.coordinates[1], lon: item.geometry.coordinates[0],
+      })),
+    ];
     const list = $('journey-candidates');
     list.replaceChildren();
-    if (!tokyo.length) {
-      showMessage('東京都内の候補が見つかりませんでした。「渋谷区神南1」のように区市町村から入力してください。', 'warning');
+    if (!candidates.length) {
+      showMessage('候補が見つかりませんでした。「東京駅」「東京タワー」のような名前か、「渋谷区神南1」のような住所で入力してください。', 'warning');
       return;
     }
     showMessage('候補から出発地を選んでください。');
-    for (const item of tokyo) {
-      const [lon, lat] = item.geometry.coordinates;
+    for (const item of candidates) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = item.properties.title;
+      button.textContent = item.title;
       button.addEventListener('click', () => {
-        setOrigin(lat, lon, item.properties.title);
+        setOrigin(item.lat, item.lon, item.label);
         showMessage('');
       });
       const entry = document.createElement('li');
@@ -151,7 +163,7 @@
     event.preventDefault();
     const current = ++requestId;
     if (!origin) {
-      showMessage('出発地を選んでください（現在地または住所検索）。', 'warning');
+      showMessage('出発地を選んでください（現在地または地名・住所の検索）。', 'warning');
       return;
     }
     if (!destination) {
