@@ -328,7 +328,9 @@ def build_handler():
 
     extras = ExtraService(ROOT, extra_cache)
     from transit_experiment.journey import JourneyPlanner
-    journeys = JourneyPlanner(estimates, extras)
+    from transit_experiment.roads import Roads
+    roads = processed / "roads.sqlite"
+    journeys = JourneyPlanner(estimates, extras, Roads(roads) if roads.exists() else None)
     return make_handler(cache, processed, trains, stations, estimates, extras, journeys), (estimates, extras)
 
 

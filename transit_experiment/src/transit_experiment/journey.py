@@ -49,6 +49,7 @@ class Network:
     def __init__(self):
         self.stops, self.connections = {}, []
         self.paths = {}  # trip -> path(stops) giving [(lat, lon)] along the track or road, or None.
+        self.walk = None  # walk(a, b) giving [(lat, lon)] along the streets between two points, or None.
 
     def add_trip(self, trip, line, mode, rows, path=None):
         """rows: [(Stop, arrival, departure)] in travel order. Hops with impossible times are dropped."""
@@ -367,11 +368,15 @@ def describe(legs, network, by_trip, origin, destination, start):
         else:
             kind, frm, to, dep, arr = leg
             a, b = place(frm, origin), place(to, destination)
-            distance = metres((a["lat"], a["lon"]), (b["lat"], b["lon"]))
-            walk_s, walk_m = walk_s + arr - dep, walk_m + distance
+            walk_s += arr - dep
             if arr - dep < 1:
                 continue
-            out.append({"mode": "walk", "from": a, "to": b, "depart": display_time(dep), "arrive": display_time(arr),
+            # Drawn along the streets when there is road data; the time is still the straight-line estimate.
+            line = network.walk and network.walk((a["lat"], a["lon"]), (b["lat"], b["lon"]))
+            line = line or [(a["lat"], a["lon"]), (b["lat"], b["lon"])]
+            distance = sum(metres(p, q) for p, q in zip(line, line[1:]))
+            walk_m += distance
+            out.append({"mode": "walk", "from": a, "to": b, "path": line, "depart": display_time(dep), "arrive": display_time(arr),
                         "distance_m": round(distance)})
     total, ride_s, walk_s = round(legs[-1][4] - start), round(ride_s), round(walk_s)
     # Wait = everything that is neither riding nor walking, including the first wait at the origin.
@@ -383,8 +388,8 @@ def describe(legs, network, by_trip, origin, destination, start):
 
 class JourneyPlanner:
     """Builds the network from the server's metro timetable and GTFS services, per request window."""
-    def __init__(self, timetables, extras):
-        self.timetables, self.extras = timetables, extras
+    def __init__(self, timetables, extras, roads=None):
+        self.timetables, self.extras, self.roads = timetables, extras, roads
         self.base_key, self.base = None, None
 
     def plan(self, origin, destination, depart, arrive, radius=AREA_RADIUS_M, now=None):
@@ -394,6 +399,7 @@ class JourneyPlanner:
         if not start < arrive <= start + MAX_WINDOW_S:
             raise ValueError(f"到着希望時刻は出発時刻より後、{MAX_WINDOW_S // 3600}時間以内にしてください。")
         network, sources = Network(), []
+        network.walk = self.roads and self.roads.route
         with self.timetables.snap_lock:
             tables = [t for (route, cal), snap in self.timetables.snapshots.items()
                       if cal == calendar and snap and snap.get("updated_at") for t in snap["notices"]]
@@ -415,5 +421,5 @@ class JourneyPlanner:
         return {"journey": result, "complete": complete, "radius_m": radius, "service_date": day.isoformat(), "calendar": calendar,
                 "window": {"depart": display_time(start), "arrive": display_time(arrive)}, "sources": sources,
                 "notes": ["乗車区間の表示と距離は線路・バスの運行経路に沿っています（形状データがない区間は直線）。再訪判定は駅間を直線で近似しています。",
-                          "徒歩は直線距離×1.3、分速80mで見積もっています。",
+                          "徒歩の所要時間は直線距離×1.3、分速80mで見積もっています（表示と距離は道路データがあれば道路沿い）。",
                           "到着はデータ上の判定です。遅延・運休は反映していません。"]}

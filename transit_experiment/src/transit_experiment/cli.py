@@ -24,6 +24,8 @@ def main() -> None:
     subcommands.add_parser("fetch-tokyo-metro-status", help="Fetch current ODPT Tokyo Metro notices")
     jr_parser = subcommands.add_parser("import-jr-gtfs", help="Import a licensed local JR GTFS ZIP; restart the server afterwards")
     jr_parser.add_argument("path", type=Path, help="GTFS ZIP you are authorized to use")
+    roads_parser = subcommands.add_parser("import-roads", help="Import Overture road segments (GeoJSONSeq) for walking routes")
+    roads_parser.add_argument("path", type=Path, help="Segments downloaded with the overturemaps CLI (see roads.py)")
     web_parser = subcommands.add_parser("serve", help="Show the animated Tokyo Metro web map")
     web_parser.add_argument("--host", default="127.0.0.1")
     web_parser.add_argument("--port", type=int, default=8000)
@@ -36,6 +38,10 @@ def main() -> None:
         from transit_experiment.gtfs import import_feed
         import_feed(args.path, PROCESSED_DIR / "jr-gtfs.sqlite")
         print("JR GTFS imported. Restart the web server to replace the headway model with this timetable.")
+    elif args.command == "import-roads":
+        from transit_experiment.roads import import_roads
+        count = import_roads(args.path, PROCESSED_DIR / "roads.sqlite")
+        print(f"Imported {count} walkable road segments. Restart the web server to draw walks along the streets.")
     elif args.command == "import-static-railways":
         counts = import_tokyo_railways(RAW_DIR, PROCESSED_DIR)
         print("Static railway import completed:")
