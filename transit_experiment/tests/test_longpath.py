@@ -199,10 +199,24 @@ class PlanTests(unittest.TestCase):
                                            {"Content-Type": "application/json"}))
                 with request({"start": "S", "goal": "G", "budget_minutes": 5}) as response:
                     self.assertEqual(json.load(response)["minutes"], 5)
-                with self.assertRaises(HTTPError) as error:
-                    request({"start": "S", "goal": "G", "budget_minutes": float("nan")})
-                self.assertEqual(error.exception.code, 400)
-                error.exception.close()
+                valid = {"start": "S", "goal": "G", "budget_minutes": 5}
+                for changes in [{"budget_minutes": value} for value in
+                                [float("nan"), float("inf"), -1, 1441, 10 ** 400, None, {}]] + [
+                        {"start": "missing"}, {"start": []}, {"goal": None},
+                        {"used": [True]}, {"used": [-1]}, {"used": [1]},
+                        {"allowed_routes": ["missing"]}, {"allowed_routes": "r"}]:
+                    with self.subTest(changes=changes), self.assertRaises(HTTPError) as error:
+                        request(valid | changes)
+                    self.assertEqual(error.exception.code, 400)
+                    error.exception.close()
+                for changes, status, nodes in [
+                        ({"allowed_routes": []}, "infeasible", []),
+                        ({"goal": "S", "budget_minutes": 0, "allowed_routes": []}, "optimal", ["S"]),
+                        ({"start": "G", "goal": "S", "used": [0]}, "infeasible", [])]:
+                    with request(valid | changes) as response:
+                        result = json.load(response)
+                    self.assertEqual(result["status"], status)
+                    self.assertEqual(result["nodes"], nodes)
             finally:
                 server.shutdown()
                 server.server_close()

@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from transit_experiment.longpath import build_network  # noqa: E402
+from transit_experiment.longpath import build_network, plan  # noqa: E402
 
 SCENARIOS = [
     # (名前, 始点, 終点, 予算分, allowed_routes(None=全線))
@@ -50,10 +50,6 @@ def resolve(network, name: str):
         if name in node["name"]:
             return node_id
     raise KeyError(name)
-
-
-def route_mode_filter(network, mode: str):
-    return sorted(rid for rid, r in network.routes.items() if r["mode"] == mode)
 
 
 def main():
@@ -91,8 +87,8 @@ def main():
             started = time.monotonic()
             if profiler:
                 profiler.enable()
-            result = plan_safe(network, resolve(network, start), resolve(network, goal),
-                               budget, allowed, args.seconds)
+            result = plan(network, resolve(network, start), resolve(network, goal),
+                          budget, allowed_routes=allowed, compute_seconds=args.seconds)
             if profiler:
                 profiler.disable()
             runs.append((time.monotonic() - started, result))
@@ -133,11 +129,6 @@ def main():
     if args.json:
         Path(args.json).write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"保存: {args.json}")
-
-
-def plan_safe(network, start, goal, budget, allowed, seconds):
-    from transit_experiment.longpath import plan
-    return plan(network, start, goal, budget, allowed_routes=allowed, compute_seconds=seconds)
 
 
 if __name__ == "__main__":

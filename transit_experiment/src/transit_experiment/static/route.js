@@ -6,7 +6,7 @@ const network = { nodes: new Map(), edges: [], routes: new Map(), byName: new Ma
 const state = { current: null, used: new Set(), elapsed: 0, budgetTotal: null, started: false, plan: null, cursor: 0, detour: 0, simulationStart: null, busy: false };
 let map = null;
 const routeLayers = new Map();
-let planLayer = null, currentMarker = null, planNodes = [];
+let planLayer = null, currentMarker = null;
 
 function status(text) { $('status').textContent = text; }
 
@@ -55,8 +55,10 @@ function checkedRoutes() {
 
 function pickStation(node) {
   if (state.busy) return;
-  if (!state.started && !$('start').value) $('start').value = node.name;
-  else $('goal').value = node.name;
+  if (!state.started && !$('start').value) {
+    $('start').value = node.name;
+    state.current = null;
+  } else $('goal').value = node.name;
   invalidatePlan();
   status(`「${node.name}」を設定しました。`);
 }
@@ -74,10 +76,8 @@ function drawCurrent() {
 
 function drawPlan() {
   if (planLayer) { planLayer.remove(); planLayer = null; }
-  planNodes = [];
   const result = state.plan;
   if (!result || !result.nodes || result.nodes.length < 2) return;
-  planNodes = result.nodes;
   const segments = [];
   for (let i = 0; i < result.edges.length; i++) {
     const a = network.nodes.get(result.nodes[i]);
@@ -94,7 +94,6 @@ function renderPlan() {
   if (!result || !result.nodes.length) {
     panel.hidden = true;
     if (planLayer) { planLayer.remove(); planLayer = null; }
-    planNodes = [];
     return;
   }
   panel.hidden = false;
@@ -112,7 +111,7 @@ function renderPlan() {
       legs.push({ route: edge.route, name: route.name, minutes: edge.minutes, from: nodeName(result.nodes[i]), to: nodeName(result.nodes[i + 1]), count: 1 });
     }
   }
-  $('plan-summary').textContent = `合計乗車 ${result.minutes}分（${result.edges.length}区間）· 探索 ${result.explored.toLocaleString()}ノード · ${result.status === 'optimal' ? '予算内全探索ずみ' : '時間打ち切りの暫定解'}`;
+  $('plan-summary').textContent = `合計乗車 ${result.minutes}分（${result.edges.length}区間）· 探索 ${result.explored.toLocaleString()}ノード · ${result.status === 'optimal' ? '最適解（全探索完了または予算上界到達）' : '時間打ち切りの暫定解'}`;
   $('plan-legs').replaceChildren(...legs.map(leg => {
     const item = document.createElement('li');
     item.textContent = `${leg.name}: ${leg.from} → ${leg.to}（${Math.round(leg.minutes)}分・${leg.count}区間）`;
@@ -121,7 +120,6 @@ function renderPlan() {
   $('depart').disabled = state.started;
   $('advance').disabled = !state.started || state.cursor >= result.edges.length;
   updateProgress();
-  drawPlan();
 }
 
 function updateProgress() {
@@ -142,7 +140,10 @@ async function doPlan() {
   const goal = resolveName($('goal').value);
   if (!start || !goal) { status('出発と到着の駅名を入力してください（入力候補から選択）。'); return; }
   const budget = remainingBudget();
-  if (budget === null || budget < 0 || budget > 1440 || (!budget && start !== goal)) { status('締切は現在から24時間以内に設定してください。'); return; }
+  if (budget === null || budget < 0 || budget > 1440 || (!budget && start !== goal)) {
+    status(state.started ? '締切までの残り時間がありません。実績は保持されています。' : '締切は現在から24時間以内に設定してください。');
+    return;
+  }
   state.busy = true;
   document.querySelectorAll('button, input, select').forEach(e => { e.disabled = true; });
   status('探索中…（数秒かかることがあります）');
@@ -156,17 +157,14 @@ async function doPlan() {
     $('notes').textContent = (result.notes || []).join(' ');
     if (!result.nodes || !result.nodes.length) {
       state.plan = null;
-      status(result.status === 'time_limit'
-        ? '制限時間内に有効な経路を見つけられませんでした。予算を伸ばすか経路フィルターを減らしてください。'
-        : '条件を満たす経路がありません（予算不足・未使用区間の不足など）。');
-      renderPlan();
+      status('条件を満たす経路がありません（予算不足・未使用区間の不足など）。');
       return;
     }
     state.plan = result;
     state.cursor = 0;
     if (!state.current) state.current = start;
-    status('経路が決まりました。「出発」→「次の駅へ」で進めます。');
-    renderPlan();
+    drawPlan();
+    status(state.started ? '再計画しました。「次の駅へ」で進めます。' : '経路が決まりました。「出発」→「次の駅へ」で進めます。');
   } catch (error) {
     status(`計画に失敗しました: ${error.message}`);
   } finally {

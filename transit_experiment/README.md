@@ -67,8 +67,17 @@ uv run python benchmarks/bench_longpath.py --seconds 0.2
 
 探索APIは `POST /api/route/plan` に `start`, `goal`（ノードID）, `budget_minutes`,
 `used`（区間IDの配列）, `allowed_routes`（路線ID配列、nullなら全路線、空配列なら全解除）を渡します。
-グラフとIDは `GET /api/route/network`。不正なID・非有限値等は400です。
+グラフとIDは `GET /api/route/network`。不正なID・非有限値・浮動小数点に収まらない巨大整数等は400です。
+締切超過後の再計画は行わず、乗車・道草の実績は保持します。
 ローカル試験用サーバーであり、公開時の認証・負荷制御は別途必要です。
+
+レビューでは、固定グラフの区間使用権IDの生成を `Network.finalize()` に移し、再計画時の再生成を削除しました。
+同じ保存データ（1985ノード・6721辺）、旧/新実装を交互に30回測定した中央値では、
+全線・新宿→東京120分が27.14→19.89ms、鉄道のみ・渋谷→上野120分が16.21→7.88ms、
+バスのみ・東京→両国240分が29.96→21.37ms。結果の経路・探索数は一致しました（環境依存）。
+`uv run python benchmarks/bench_longpath.py --seconds 0.2 --repeat 7` で9シナリオを反復検証できます。
+前処理の隣接リスト生成・ソートとDijkstraは残るコストです。UIは新しい計画の取得時だけ経路線を描き、
+進行操作のたびに同じ線を再作成・全体表示しません。`optimal` の表示も、全探索だけでなく予算上界到達を含みます。
 
 ### 軽量表示
 

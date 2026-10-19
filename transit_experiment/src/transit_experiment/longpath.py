@@ -62,6 +62,11 @@ class Network:
         self.edges.append({"u": u, "v": v, "minutes": minutes, "route": route_id})
 
     def finalize(self):
+        # 構築後は固定。再計画ごとに同じ区間の使用権を作り直さない。
+        pairs = [tuple(sorted((e["u"], e["v"]))) for e in self.edges]
+        resources = {pair: i for i, pair in enumerate(dict.fromkeys(pairs))}
+        self.edge_resources = [resources[pair] for pair in pairs]
+        self.resource_count = len(resources)
         self.adj = {node: [] for node in self.nodes}
         for index, edge in enumerate(self.edges):
             self.adj[edge["u"]].append((index, edge["v"], edge["minutes"]))
@@ -236,9 +241,9 @@ def _sample_legs(samples, used_stops, route, chain):
         used_stops.add(a)
         used_stops.add(b)
         key = (route, min(a, b), max(a, b))
-        samples.setdefault(key, [])
+        values = samples.setdefault(key, [])
         if a_departure is not None and b_arrival is not None and b_arrival > a_departure:
-            samples.setdefault(key, []).append((b_arrival - a_departure) / 60)
+            values.append((b_arrival - a_departure) / 60)
 
 
 def build_network(processed: Path, key: str = ""):
@@ -306,21 +311,19 @@ def plan(network: Network, start: str, goal: str, budget_minutes: float,
     result = {"status": "infeasible", "minutes": 0.0, "edges": [], "nodes": [], "explored": 0}
     allowed = None if allowed_routes is None else set(allowed_routes)
     # 同じ両端の区間は路線違いでも共通の資源。別系統で逆走する抜け道を塞ぐ。
-    pairs = [tuple(sorted((e["u"], e["v"]))) for e in network.edges]
-    resources = {pair: i for i, pair in enumerate(dict.fromkeys(pairs))}
-    edge_resources = [resources[pair] for pair in pairs]
-    used_pairs = {pairs[i] for i in used_edges}
+    edge_resources = network.edge_resources
+    used_resources = {edge_resources[i] for i in used_edges}
     node_ids = list(network.nodes)
     index_of = {node_id: i for i, node_id in enumerate(node_ids)}
     incident = [[] for _ in node_ids]
     seen = set()
     for edge_id, edge in enumerate(network.edges):
-        if pairs[edge_id] in used_pairs or (allowed is not None and edge["route"] not in allowed):
+        if edge_resources[edge_id] in used_resources or (allowed is not None and edge["route"] not in allowed):
             continue
         u, v, weight = index_of[edge["u"]], index_of[edge["v"]], round(edge["minutes"] * 10)
         # フィルター後、同一区間・同時間は同じ探索状態に至るので代表路線だけ残す。
         # 時間が違う並行辺は締切への収まり方が異なるため、どちらも必要。
-        equivalent = (resources[pairs[edge_id]], weight)
+        equivalent = (edge_resources[edge_id], weight)
         if equivalent in seen:
             continue
         seen.add(equivalent)
@@ -346,7 +349,7 @@ def plan(network: Network, start: str, goal: str, budget_minutes: float,
     # 明示スタックで長い経路にも対応し、HTTPスレッド間の再帰上限変更を避ける。
     # DFSの現経路だけを保持するので巨大整数マスクの複製は不要。
     # 各区間の占有をpush/popと対にして更新する（並行辺も同じ使用権）。
-    occupied = bytearray(len(resources))
+    occupied = bytearray(network.resource_count)
     stack = [(source, 0, iter(incident[source]))]
     explored, status = 0, "optimal"
     while stack and best_gain < budget:
@@ -405,7 +408,7 @@ class Service:
         network, notes = self.network_data()
         result = plan(
             network,
-            str(body["start"]), str(body["goal"]), float(body["budget_minutes"]),
+            body["start"], body["goal"], body["budget_minutes"],
             used_edges=body.get("used", []),
             allowed_routes=body.get("allowed_routes"),
             compute_seconds=self.compute_seconds,

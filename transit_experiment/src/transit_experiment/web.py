@@ -197,7 +197,7 @@ def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None
                 if not isinstance(body, dict):
                     raise ValueError
                 result = longpath_service.plan(body)
-            except (ValueError, TypeError, KeyError):
+            except (ValueError, TypeError, KeyError, OverflowError):
                 self.respond(400, b"Invalid request body", "text/plain")
                 return
             self.respond(200, json.dumps(result, ensure_ascii=False).encode(), "application/json; charset=utf-8")
