@@ -5,6 +5,8 @@ description = "Static Tokyo rail-line importer and optional ODPT status fetcher"
 requires-python = ">=3.14"
 dependencies = [
     "python-dotenv>=1.2.3",
+    # WindowsではOSのtzデータベースが無く zoneinfo が失敗するため（Linuxでは無視される）。
+    "tzdata>=2025.2",
 ]
 
 [project.scripts]
