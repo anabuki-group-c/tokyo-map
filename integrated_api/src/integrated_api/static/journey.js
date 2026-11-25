@@ -1,5 +1,5 @@
 'use strict';
-// Long-route search: from the current location or a searched Tokyo name or address to a place picked in places.js.
+// Long-route search: from the current location or a searched Tokyo name or address to a searched or picked place.
 (() => {
   const MODE_LABELS = {walk: '徒歩', metro: 'メトロ', jr: 'JR', bus: '都営バス'};
   const MODE_COLORS = {walk: '#495057', metro: '#7048e8', jr: '#2b8a3e', bus: '#e67700'};
@@ -21,6 +21,12 @@
     origin = {lat, lon, label};
     $('journey-origin').textContent = label;
     $('journey-candidates').replaceChildren();
+  }
+
+  function setDestination(place) {
+    destination = place;
+    $('journey-destination').textContent = place.name ?? '（名称なし）';
+    $('journey-destination-candidates').replaceChildren();
   }
 
   function locate() {
@@ -45,8 +51,9 @@
     return response.json();
   }
 
-  async function geocode() {
-    const query = $('journey-address').value.trim();
+  // Origin and destination share this: noun names the field, pick(lat, lon, label) stores the choice.
+  async function geocode(inputId, listId, noun, pick) {
+    const query = $(inputId).value.trim();
     if (!query) {
       showMessage('地名・駅名・住所を入力してください。', 'warning');
       return;
@@ -70,19 +77,19 @@
         label: item.properties.title, title: item.properties.title, lat: item.geometry.coordinates[1], lon: item.geometry.coordinates[0],
       })),
     ];
-    const list = $('journey-candidates');
+    const list = $(listId);
     list.replaceChildren();
     if (!candidates.length) {
       showMessage('候補が見つかりませんでした。「東京駅」「東京タワー」のような名前か、「渋谷区神南1」のような住所で入力してください。', 'warning');
       return;
     }
-    showMessage('候補から出発地を選んでください。');
+    showMessage(`候補から${noun}を選んでください。`);
     for (const item of candidates) {
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = item.title;
       button.addEventListener('click', () => {
-        setOrigin(item.lat, item.lon, item.label);
+        pick(item.lat, item.lon, item.label);
         showMessage('');
       });
       const entry = document.createElement('li');
@@ -91,9 +98,15 @@
     }
   }
 
+  // While a route is shown, hide the transit lines, stations and trains (all in the overlay and flows panes).
+  function showTransit(visible) {
+    map.getContainer().classList.toggle('journey-only', !visible);
+  }
+
   function clearRoute() {
     ++requestId;  // Ignore a search still in flight.
     layer.clearLayers();
+    showTransit(true);
     $('journey-result').replaceChildren();
     showMessage('');
   }
@@ -104,6 +117,7 @@
 
   function drawJourney(journey) {
     layer.clearLayers();
+    showTransit(false);
     const bounds = L.latLngBounds([]);
     for (const leg of journey.legs) {
       // path follows the track or road; without it, join the stops with straight lines.
@@ -167,7 +181,7 @@
       return;
     }
     if (!destination) {
-      showMessage('目的地を選んでください。周辺施設の詳細から「ここへの遠回り経路」を押します。', 'warning');
+      showMessage('目的地を選んでください（地名・住所の検索、または周辺施設の詳細から「ここへの遠回り経路」）。', 'warning');
       return;
     }
     if (!$('journey-search').reportValidity()) return;
@@ -188,6 +202,7 @@
     if (current !== requestId) return;  // A newer search has started.
     if (!response.ok || !body.journey) {
       layer.clearLayers();
+      showTransit(true);
       $('journey-result').replaceChildren();
       showMessage(body.error ?? `エラーが発生しました（HTTP ${response.status}）。`, 'error');
       return;
@@ -205,19 +220,25 @@
     renderer = L.svg({pane: 'journey'});
     layer = L.layerGroup().addTo(map);
     map.on('placeselect', ({place}) => {
-      destination = place;
-      $('journey-destination').textContent = place.name ?? '（名称なし）';
+      setDestination(place);
       map.closePopup();
       $('journey-panel').scrollIntoView({behavior: 'smooth', block: 'start'});
     });
     $('journey-locate').addEventListener('click', locate);
-    $('journey-geocode').addEventListener('click', geocode);
-    $('journey-address').addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();  // Search the address instead of submitting the route form.
-        geocode();
-      }
-    });
+    for (const [inputId, buttonId, listId, noun, pick] of [
+      ['journey-address', 'journey-geocode', 'journey-candidates', '出発地', setOrigin],
+      ['journey-destination-address', 'journey-destination-geocode', 'journey-destination-candidates', '目的地',
+        (lat, lon, name) => setDestination({lat, lon, name})],
+    ]) {
+      const run = () => geocode(inputId, listId, noun, pick);
+      $(buttonId).addEventListener('click', run);
+      $(inputId).addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();  // Search the name instead of submitting the route form.
+          run();
+        }
+      });
+    }
     $('journey-clear').addEventListener('click', clearRoute);
     $('journey-search').addEventListener('submit', search);
   }

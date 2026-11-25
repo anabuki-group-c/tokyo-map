@@ -42,8 +42,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .journey-address button{width:auto}
 .journey-point{font-size:13px;margin:14px 0 8px}
 .journey-point span{color:#1f7a63;font-weight:600}
-#journey-candidates{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:6px}
-#journey-candidates button{text-align:left;font-size:13px}
+.journey-candidates{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:6px}
+.journey-candidates button{text-align:left;font-size:13px}
 .journey-summary{font-size:15px;font-weight:700;color:#1f7a63;margin:12px 0}
 .journey-legs{padding-left:18px;margin:0;display:grid;gap:10px}
 .journey-legs li{font-size:13px}
@@ -78,3 +78,4 @@ footer a{color:inherit}
 #map-error{position:absolute;z-index:900;top:72px;left:16px;right:16px;background:#fdecea;color:#8a1f11;padding:14px;border-radius:6px;font-size:13px}
 @media(prefers-reduced-motion:reduce){.route-flow{animation:none}}
 @media(max-width:760px){main{height:auto;display:flex;flex-direction:column}.map-shell{height:60dvh;min-height:340px;order:-1}aside{border-right:0;padding:16px}.map-controls{top:auto;bottom:72px;right:12px;flex-direction:column}}
+.journey-only .leaflet-overlay-pane,.journey-only .leaflet-flows-pane{visibility:hidden}

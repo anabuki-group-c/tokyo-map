@@ -6,7 +6,7 @@
   <title>周辺施設検索 — 路線マップ付き</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" crossorigin="">
-  <link rel="stylesheet" href="/places.css?v=3">
+  <link rel="stylesheet" href="/places.css?v=5">
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js" crossorigin=""></script>
   <script defer src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js" crossorigin=""></script>
@@ -16,7 +16,7 @@
   <script defer src="/app.js?v=15"></script>
   <!-- After app.js: uses the map it creates. -->
   <script defer src="/places.js?v=7"></script>
-  <script defer src="/journey.js?v=5"></script>
+  <script defer src="/journey.js?v=7"></script>
 </head>
 <body>
   <main>
@@ -53,9 +53,12 @@
           <button type="button" id="journey-locate">現在地を出発地にする</button>
           <label for="journey-address">地名・駅名・住所で出発地を探す（東京都内）</label>
           <div class="journey-address"><input id="journey-address" type="search" placeholder="例：東京駅、東京タワー、渋谷区神南1" autocomplete="off"><button type="button" id="journey-geocode">検索</button></div>
-          <ul id="journey-candidates" aria-label="出発地の候補"></ul>
+          <ul id="journey-candidates" class="journey-candidates" aria-label="出発地の候補"></ul>
           <p class="journey-point">目的地：<span id="journey-destination">未選択</span></p>
-          <p class="muted">検索結果のお店・観光地の詳細を開いて「ここへの遠回り経路」を押します。</p>
+          <label for="journey-destination-address">地名・駅名・住所で目的地を探す（東京都内）</label>
+          <div class="journey-address"><input id="journey-destination-address" type="search" placeholder="例：東京駅、東京タワー、渋谷区神南1" autocomplete="off"><button type="button" id="journey-destination-geocode">検索</button></div>
+          <ul id="journey-destination-candidates" class="journey-candidates" aria-label="目的地の候補"></ul>
+          <p class="muted">周辺施設の検索結果から選ぶ場合は、詳細を開いて「ここへの遠回り経路」を押します。</p>
           <label for="journey-depart">出発時刻（空欄なら今）</label>
           <input id="journey-depart" type="time">
           <label for="journey-arrive">到着希望時刻</label>
