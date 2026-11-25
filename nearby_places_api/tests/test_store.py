@@ -140,6 +140,11 @@ class StoreTests(unittest.TestCase):
         self.assertEqual([p["id"] for p in self.store.nearby(*TOKYO_STATION, 500, "all", 1)], ["near"])
         self.assertEqual(self.store.nearby(*TOKYO_STATION, 50), [])
 
+    def test_named_puts_names_starting_with_the_query_first(self):
+        self.assertEqual([place["id"] for place in self.store.named("店")], ["near", "inside", "outside"])
+        self.assertEqual([place["id"] for place in self.store.named("side")], ["inside", "outside"])
+        self.assertEqual(self.store.named("駅"), [])
+
     def test_website_keeps_first_http_url(self):
         lat, lon = TOKYO_STATION
         features = [

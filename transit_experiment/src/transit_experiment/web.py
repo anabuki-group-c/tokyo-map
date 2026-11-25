@@ -16,6 +16,7 @@ import math
 from urllib.request import urlopen
 
 from transit_experiment.odpt import TRAIN_INFORMATION_URL
+from transit_experiment.timetable import seconds
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).parent / "static"
@@ -183,10 +184,59 @@ class StatusCache:
             }
 
 
-def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None, estimates=None, extras=None):
+def parse_journey(query):
+    """Validate /api/journey/longest parameters. Raises ValueError with a message for the user."""
+    def value(name):
+        values = query.get(name)
+        return values[0] if values and values[0] else None
+
+    points = []
+    for prefix in ("from", "to"):
+        try:
+            lat, lon = float(value(f"{prefix}_lat")), float(value(f"{prefix}_lon"))
+        except (TypeError, ValueError):
+            raise ValueError(f"{prefix}_lat・{prefix}_lonには数値を指定してください。") from None
+        if not (math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError(f"{prefix}_lat・{prefix}_lonの範囲が不正です。")
+        points.append((lat, lon))
+    times = []
+    for name in ("depart", "arrive"):
+        text = value(name)
+        if text is None:
+            if name == "arrive":
+                raise ValueError("到着希望時刻（arrive）を HH:MM で指定してください。")
+            times.append(None)
+            continue
+        hour, _, minute = text.partition(":")
+        if not (hour.isdigit() and minute.isdigit() and len(minute) == 2 and int(hour) < 24 and int(minute) < 60):
+            raise ValueError(f"{name}は HH:MM の形式で指定してください。")
+        times.append(seconds(text))
+    radius = value("radius_m")
+    try:
+        radius = 300.0 if radius is None else float(radius)
+    except ValueError:
+        raise ValueError("radius_m（訪問エリアの半径）には数値を指定してください。") from None
+    if not 50 <= radius <= 2000:
+        raise ValueError("radius_m（訪問エリアの半径）は50〜2000メートルで指定してください。")
+    return points[0], points[1], times[0], times[1], radius
+
+
+def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None, estimates=None, extras=None, journeys=None):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             path = urlsplit(self.path).path
+            if path == "/api/journey/longest" and journeys is not None:
+                try:
+                    result = journeys.plan(*parse_journey(parse_qs(urlsplit(self.path).query)))
+                    status = 200 if result["journey"] else 404
+                    if not result["journey"] and result["complete"]:
+                        result["error"] = "条件を満たす経路はありません。到着希望時刻を遅くするか、訪問エリアの半径を小さくしてください。"
+                    elif not result["journey"]:
+                        result["error"] = "計算時間内に経路を見つけられませんでした（経路がないとは限りません）。"
+                except ValueError as error:
+                    status, result = 400, {"error": str(error)}
+                self.respond(status, json.dumps(result, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+                return
             if path in ("/api/extra-network", "/api/extra-positions") and extras is not None:
                 query = parse_qs(urlsplit(self.path).query)
                 mode = query.get("mode", [""])[0]
@@ -257,7 +307,8 @@ def make_handler(cache: StatusCache, processed: Path, trains=None, stations=None
     return Handler
 
 
-def serve(host="127.0.0.1", port=8000):
+def build_handler():
+    """Create the handler and its background services. Set stop on each service at shutdown."""
     processed = ROOT / "data" / "processed"
     cache = StatusCache(processed / "realtime" / "web-status-cache.json", os.environ.get("ODPT_CONSUMER_KEY", ""))
     key = os.environ.get("ODPT_CONSUMER_KEY", "")
@@ -276,13 +327,22 @@ def serve(host="127.0.0.1", port=8000):
         return StatusCache(processed / "realtime" / f"gtfs-refresh-{mode}.json", token, ttl=86400, fetch=fetch)
 
     extras = ExtraService(ROOT, extra_cache)
-    server = ThreadingHTTPServer((host, port), make_handler(cache, processed, trains, stations, estimates, extras))
+    from transit_experiment.journey import JourneyPlanner
+    from transit_experiment.roads import Roads
+    roads = processed / "roads.sqlite"
+    journeys = JourneyPlanner(estimates, extras, Roads(roads) if roads.exists() else None)
+    return make_handler(cache, processed, trains, stations, estimates, extras, journeys), (estimates, extras)
+
+
+def serve(host="127.0.0.1", port=8000):
+    handler, services = build_handler()
+    server = ThreadingHTTPServer((host, port), handler)
     print(f"Tokyo Metro map: http://{host}:{port} (Ctrl+C to stop)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        estimates.stop.set()
-        extras.stop.set()
+        for service in services:
+            service.stop.set()
         server.server_close()

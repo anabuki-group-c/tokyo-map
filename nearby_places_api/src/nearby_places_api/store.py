@@ -198,6 +198,17 @@ class PlaceStore:
         places.sort(key=lambda place: (place["distance_m"], place["id"]))
         return places[:limit]
 
+    def named(self, query: str, limit: int = 6) -> list[dict]:
+        """Places whose name contains query: exact match first, then names starting with it, shorter first."""
+        # ponytail: instr() scans every name (~160k rows, tens of ms); an FTS5 trigram index would make it O(matches).
+        with self.connect() as connection:
+            rows = self._execute(connection,
+                """SELECT id, name, category, lat, lon, address FROM places WHERE instr(name, ?) > 0
+                   ORDER BY name = ? DESC, instr(name, ?) = 1 DESC, length(name), id LIMIT ?""",
+                (query, query, query, limit)).fetchall()
+        return [{"id": place_id, "name": name, "category": category, "lat": lat, "lon": lon, "address": address}
+                for place_id, name, category, lat, lon, address in rows]
+
     @staticmethod
     def _execute(connection, sql: str, parameters: tuple):
         try:

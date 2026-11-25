@@ -116,6 +116,11 @@ class RailGeometry:
         # Clockwise degrees from north, matching the map's unrotated viewport.
         return round(math.degrees(math.atan2(dx, dy)) % 360, 1)
 
+    def path(self, route, a, b):
+        """Track points from a to b, or the straight chord [a, b] when the track cannot be followed."""
+        self.position(route, a, b, 0)
+        return self.paths[(route, a, b)][0]
+
     def position(self, route, a, b, fraction):
         key = (route, a, b)
         if key not in self.paths:
